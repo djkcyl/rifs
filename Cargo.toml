@@ -1,44 +1,66 @@
 [package]
-name = "ifs"
+name = "rifs"
 version = "0.1.0"
 edition = "2021"
 
+# 构建体积优化配置
+[profile.release]
+# 最高级别的优化
+opt-level = 3
+# 启用链接时优化，显著减少体积
+lto = true
+# 使用单个代码生成单元以获得更好的优化
+codegen-units = 1
+# 启用panic时直接中止，减少unwinding代码
+panic = "abort"
+# 去除调试符号，大幅减少体积
+strip = true
+
+# 进一步优化的release配置
+[profile.release-small]
+inherits = "release"
+# 优化体积而非速度
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
 [dependencies]
-# Web 框架
-axum = { version = "0.8", features = ["multipart"] }
-axum-extra = { version = "0.10", features = ["typed-header"] }
+# Web 框架 - 启用必需的features
+axum = { version = "0.8", features = ["multipart", "json", "tokio", "http1", "query"], default-features = false }
 
-# 异步运行时
-tokio = { version = "1.45", features = ["full"] }
+# 异步运行时 - 只启用必需的features
+tokio = { version = "1.45", features = ["rt-multi-thread", "net", "fs", "io-util", "macros"], default-features = false }
 
-# HTTP 服务器
-tower = "0.5"
-tower-http = { version = "0.6", features = ["cors", "fs"] }
+# HTTP 服务器 - 启用必需features
+tower = { version = "0.5", features = ["util"], default-features = false }
+tower-http = { version = "0.6", features = ["cors", "trace"], default-features = false }
 
 # 序列化
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-
-# UUID 生成
-uuid = { version = "1.17", features = ["v4", "serde"] }
-
-# 文件和路径处理
-tokio-util = { version = "0.7", features = ["io"] }
+serde_json = { version = "1.0", features = ["std"] }
 
 # 错误处理
-anyhow = "1.0"
-thiserror = "2.0"
+anyhow = { version = "1.0", features = ["std"] }
+thiserror = { version = "2.0" }
 
 # 日志
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-
-# 图像处理（用于后续的格式转换）
-image = "0.25"
-
-# 文件MIME类型检测
-mime_guess = "2.0"
+tracing = { version = "0.1", features = ["std"], default-features = false }
+tracing-subscriber = { version = "0.3", features = ["fmt", "ansi", "std"], default-features = false }
 
 # 配置文件
-config = "0.15"
-toml = "0.8"
+config = { version = "0.15", features = ["toml"], default-features = false }
+toml = { version = "0.8", features = ["parse"], default-features = false }
+
+# 数据库支持 - SeaORM
+sea-orm = { version = "1.1", features = ["sqlx-sqlite", "sqlx-postgres", "sqlx-mysql", "runtime-tokio-rustls", "macros", "with-chrono"], default-features = false }
+sea-orm-migration = { version = "1.1", features = ["sqlx-sqlite", "sqlx-postgres", "sqlx-mysql", "runtime-tokio-rustls"], default-features = false }
+async-trait = { version = "0.1", default-features = false }
+chrono = { version = "0.4", features = ["serde"], default-features = false }
+
+# 加密哈希
+sha2 = { version = "0.10", default-features = false }
+
+# 文件类型检测
+infer = { version = "0.16", default-features = false }

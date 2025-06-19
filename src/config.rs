@@ -12,6 +12,7 @@ static CONFIG: OnceLock<AppConfig> = OnceLock::new();
 pub struct AppConfig {
     pub server: ServerConfig,
     pub storage: StorageConfig,
+    pub database: DatabaseConfig,
     pub logging: LoggingConfig,
     pub cache: CacheConfig,
 }
@@ -34,6 +35,17 @@ pub struct StorageConfig {
     pub upload_dir: String,
     /// 最大文件大小（字节）
     pub max_file_size: u64,
+}
+
+/// 数据库配置
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct DatabaseConfig {
+    /// 数据库类型 (sqlite, postgres, mysql)
+    pub database_type: String,
+    /// 数据库连接字符串
+    pub connection_string: String,
+    /// 最大连接数
+    pub max_connections: u32,
 }
 
 /// 日志配置
@@ -63,6 +75,11 @@ impl Default for AppConfig {
             storage: StorageConfig {
                 upload_dir: "uploads".to_string(),
                 max_file_size: 10 * 1024 * 1024, // 10MB
+            },
+            database: DatabaseConfig {
+                database_type: "sqlite".to_string(),
+                connection_string: "sqlite:./data/images.db".to_string(),
+                max_connections: 20,
             },
             logging: LoggingConfig {
                 level: "info".to_string(),
