@@ -1,0 +1,27 @@
+# 图床服务配置文件
+
+[server]
+# 服务器监听地址
+host = "0.0.0.0"
+# 服务器监听端口
+port = 3000
+# 是否启用CORS
+enable_cors = true
+
+[storage]
+# 上传文件存储目录
+# 注意：文件将按UUID前2位和第3-4位分层存储在子目录中
+# 例如：uploads/55/0e/550e8400-e29b-41d4-a716-446655440000.jpg
+upload_dir = "uploads"
+# 最大文件大小（字节）10MB
+max_file_size = 10485760
+
+[logging]
+# 日志级别: trace, debug, info, warn, error
+level = "info"
+# 是否启用日志颜色
+enable_color = true
+
+[cache]
+# 静态文件缓存时间（秒）1年
+max_age = 31536000 

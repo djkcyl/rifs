@@ -1,0 +1,44 @@
+[package]
+name = "ifs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Web 框架
+axum = { version = "0.8", features = ["multipart"] }
+axum-extra = { version = "0.10", features = ["typed-header"] }
+
+# 异步运行时
+tokio = { version = "1.45", features = ["full"] }
+
+# HTTP 服务器
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "fs"] }
+
+# 序列化
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# UUID 生成
+uuid = { version = "1.17", features = ["v4", "serde"] }
+
+# 文件和路径处理
+tokio-util = { version = "0.7", features = ["io"] }
+
+# 错误处理
+anyhow = "1.0"
+thiserror = "2.0"
+
+# 日志
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# 图像处理（用于后续的格式转换）
+image = "0.25"
+
+# 文件MIME类型检测
+mime_guess = "2.0"
+
+# 配置文件
+config = "0.15"
+toml = "0.8"
