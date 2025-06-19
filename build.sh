@@ -183,7 +183,7 @@ build_target() {
             case $target in
                 *linux*|*windows*)
                     echo -e "${CYAN}🗜️  UPX 压缩 $filename...${NC}"
-                    if upx --best --lzma "$BUILD_DIR/$filename" &> /dev/null; then
+                    if upx --best --lzma --force "$BUILD_DIR/$filename" &> /dev/null; then
                         echo -e "${GREEN}    压缩完成${NC}"
                     else
                         echo -e "${YELLOW}    压缩失败，保留原文件${NC}"
