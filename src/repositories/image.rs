@@ -1,109 +1,57 @@
 use std::sync::Arc;
 use sea_orm::{
-    Database, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
+    DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
     ColumnTrait, ActiveModelTrait, PaginatorTrait, Condition,
-    ConnectionTrait, DbBackend, Statement
+    ConnectionTrait, Statement
 };
-use sea_orm_migration::MigratorTrait;
 use chrono::Utc;
-use sha2::{Sha256, Digest};
+use async_trait::async_trait;
+use tracing::{info, debug};
 
 use crate::entities::{image, Image};
 use crate::models::{ImageInfo, ImageQuery, ImageStats, TypeStat, TimeStat};
+use crate::repositories::{Repository, BaseRepository, PageResult};
 use crate::utils::AppError;
-use crate::config::AppConfig;
-use crate::migrations::Migrator;
 
-/// 数据库服务结构体
-pub struct DatabaseService {
-    connection: Arc<DatabaseConnection>,
-    db_backend: DbBackend,
+/// 图片仓储接口
+#[async_trait]
+pub trait ImageRepositoryTrait: Repository {
+    /// 插入新的图片记录
+    async fn insert(&self, image_info: &ImageInfo) -> Result<(), AppError>;
+    
+    /// 根据hash获取图片信息
+    async fn find_by_hash(&self, hash: &str) -> Result<Option<ImageInfo>, AppError>;
+    
+    /// 分页查询图片列表
+    async fn find_by_query(&self, query: &ImageQuery) -> Result<PageResult<ImageInfo>, AppError>;
+    
+    /// 更新图片访问信息
+    async fn update_access(&self, hash: &str) -> Result<bool, AppError>;
+    
+    /// 删除图片记录
+    async fn delete_by_hash(&self, hash: &str) -> Result<bool, AppError>;
+    
+    /// 获取统计信息
+    async fn get_stats(&self) -> Result<ImageStats, AppError>;
 }
 
-impl DatabaseService {
-    /// 初始化数据库连接
-    pub async fn new() -> Result<Self, AppError> {
-        let config = AppConfig::get();
-        
-        // 根据配置创建数据库连接
-        let (connection, db_backend) = match config.database.database_type.as_str() {
-            "sqlite" => {
-                // 确保数据目录存在
-                let db_path = config.database.connection_string.strip_prefix("sqlite:")
-                    .unwrap_or(&config.database.connection_string);
-                
-                if let Some(parent) = std::path::Path::new(db_path).parent() {
-                    tokio::fs::create_dir_all(parent).await
-                        .map_err(|e| AppError::Internal(format!("创建数据目录失败: {}", e)))?;
-                }
+/// 图片仓储实现
+pub struct ImageRepository {
+    base: BaseRepository,
+}
 
-                // 如果数据库文件不存在，先创建一个空文件
-                if !std::path::Path::new(db_path).exists() {
-                    tokio::fs::File::create(db_path).await
-                        .map_err(|e| AppError::Internal(format!("创建数据库文件失败: {}", e)))?;
-                }
-
-                let conn = Database::connect(&config.database.connection_string)
-                    .await
-                    .map_err(|e| AppError::Internal(format!("SQLite数据库连接失败: {}", e)))?;
-                (conn, DbBackend::Sqlite)
-            },
-            "postgres" | "postgresql" => {
-                let conn = Database::connect(&config.database.connection_string)
-                    .await
-                    .map_err(|e| AppError::Internal(format!("PostgreSQL数据库连接失败: {}", e)))?;
-                (conn, DbBackend::Postgres)
-            },
-            "mysql" => {
-                let conn = Database::connect(&config.database.connection_string)
-                    .await
-                    .map_err(|e| AppError::Internal(format!("MySQL数据库连接失败: {}", e)))?;
-                (conn, DbBackend::MySql)
-            },
-            _ => {
-                return Err(AppError::Internal(format!("不支持的数据库类型: {}", config.database.database_type)));
-            }
-        };
-
-        // 运行数据库迁移
-        Migrator::up(&connection, None)
-            .await
-            .map_err(|e| AppError::Internal(format!("数据库迁移失败: {}", e)))?;
-
-        Ok(Self {
-            connection: Arc::new(connection),
-            db_backend,
-        })
+impl ImageRepository {
+    /// 创建新的图片仓储实例
+    pub fn new(connection: Arc<DatabaseConnection>) -> Self {
+        Self {
+            base: BaseRepository::new(connection),
+        }
     }
 
-    /// 插入新的图片记录
-    pub async fn insert_image(&self, image_info: &ImageInfo) -> Result<(), AppError> {
-        let active_model = image::ActiveModel::from(image_info);
-        
-        active_model.insert(&*self.connection)
-            .await
-            .map_err(|e| AppError::Internal(format!("插入图片记录失败: {}", e)))?;
-
-        Ok(())
-    }
-
-    /// 根据hash获取图片信息
-    pub async fn get_image(&self, identifier: &str) -> Result<Option<ImageInfo>, AppError> {
-        let result = Image::find()
-            .filter(image::Column::Hash.eq(identifier))
-            .one(&*self.connection)
-            .await
-            .map_err(|e| AppError::Internal(format!("查询图片失败: {}", e)))?;
-
-        Ok(result.map(|model| model.into()))
-    }
-
-    /// 查询图片列表
-    pub async fn query_images(&self, query: &ImageQuery) -> Result<(Vec<ImageInfo>, u64), AppError> {
-        let mut select = Image::find();
+    /// 构建查询条件
+    fn build_query_condition(&self, query: &ImageQuery) -> Condition {
         let mut condition = Condition::all();
 
-        // 构建查询条件
         if let Some(mime_type) = &query.mime_type {
             condition = condition.add(image::Column::MimeType.eq(mime_type));
         }
@@ -128,13 +76,15 @@ impl DatabaseService {
             condition = condition.add(image::Column::Hash.contains(search));
         }
 
-        select = select.filter(condition.clone());
+        condition
+    }
 
-        // 排序
+    /// 应用排序
+    fn apply_ordering(&self, select: sea_orm::Select<Image>, query: &ImageQuery) -> sea_orm::Select<Image> {
         let order_by = query.order_by.as_deref().unwrap_or("created_at");
         let order_dir = query.order_dir.as_deref().unwrap_or("DESC");
         
-        select = match order_by {
+        match order_by {
             "hash" => {
                 if order_dir.to_uppercase() == "ASC" {
                     select.order_by_asc(image::Column::Hash)
@@ -142,7 +92,6 @@ impl DatabaseService {
                     select.order_by_desc(image::Column::Hash)
                 }
             },
-
             "size" => {
                 if order_dir.to_uppercase() == "ASC" {
                     select.order_by_asc(image::Column::Size)
@@ -150,7 +99,7 @@ impl DatabaseService {
                     select.order_by_desc(image::Column::Size)
                 }
             },
-            "created_at" | "upload_time" => { // upload_time 作为 created_at 的别名
+            "created_at" | "upload_time" => {
                 if order_dir.to_uppercase() == "ASC" {
                     select.order_by_asc(image::Column::CreatedAt)
                 } else {
@@ -164,20 +113,76 @@ impl DatabaseService {
                     select.order_by_desc(image::Column::AccessCount)
                 }
             },
-            _ => { // 默认按创建时间排序
+            _ => {
                 if order_dir.to_uppercase() == "ASC" {
                     select.order_by_asc(image::Column::CreatedAt)
                 } else {
                     select.order_by_desc(image::Column::CreatedAt)
                 }
             }
-        };
+        }
+    }
+}
+
+#[async_trait]
+impl Repository for ImageRepository {
+    fn get_connection(&self) -> Arc<DatabaseConnection> {
+        self.base.get_connection()
+    }
+
+    async fn transaction<F, R>(&self, func: F) -> Result<R, AppError>
+    where
+        F: for<'c> FnOnce(&'c sea_orm::DatabaseTransaction) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<R, sea_orm::DbErr>> + Send + 'c>> + Send,
+        R: Send,
+    {
+        self.base.transaction(func).await
+    }
+}
+
+#[async_trait]
+impl ImageRepositoryTrait for ImageRepository {
+    async fn insert(&self, image_info: &ImageInfo) -> Result<(), AppError> {
+        debug!("插入图片记录: {}", image_info.hash);
+        
+        let active_model = image::ActiveModel::from(image_info);
+        let connection = self.get_connection();
+        
+        active_model.insert(&*connection)
+            .await
+            .map_err(|e| AppError::Internal(format!("插入图片记录失败: {}", e)))?;
+
+        info!("图片记录插入成功: {}", image_info.hash);
+        Ok(())
+    }
+
+    async fn find_by_hash(&self, hash: &str) -> Result<Option<ImageInfo>, AppError> {
+        debug!("根据hash查询图片: {}", hash);
+        
+        let connection = self.get_connection();
+        let result = Image::find()
+            .filter(image::Column::Hash.eq(hash))
+            .one(&*connection)
+            .await
+            .map_err(|e| AppError::Internal(format!("查询图片失败: {}", e)))?;
+
+        Ok(result.map(|model| model.into()))
+    }
+
+    async fn find_by_query(&self, query: &ImageQuery) -> Result<PageResult<ImageInfo>, AppError> {
+        debug!("分页查询图片列表: {:?}", query);
+        
+        let connection = self.get_connection();
+        let mut select = Image::find();
+        let condition = self.build_query_condition(query);
+        
+        select = select.filter(condition.clone());
+        select = self.apply_ordering(select, query);
 
         // 分页
         let limit = query.limit.unwrap_or(20);
         let offset = query.offset.unwrap_or(0);
 
-        let paginator = select.paginate(&*self.connection, limit);
+        let paginator = select.paginate(&*connection, limit);
         let total = paginator.num_items()
             .await
             .map_err(|e| AppError::Internal(format!("查询图片总数失败: {}", e)))?;
@@ -187,15 +192,21 @@ impl DatabaseService {
             .map_err(|e| AppError::Internal(format!("查询图片列表失败: {}", e)))?;
 
         let images: Vec<ImageInfo> = models.into_iter().map(|model| model.into()).collect();
+        let _page = offset / limit;
 
-        Ok((images, total))
+        Ok(PageResult {
+            items: images,
+            total,
+        })
     }
 
-    /// 更新图片访问信息
-    pub async fn update_access(&self, identifier: &str) -> Result<(), AppError> {
+    async fn update_access(&self, hash: &str) -> Result<bool, AppError> {
+        debug!("更新图片访问信息: {}", hash);
+        
+        let connection = self.get_connection();
         let image_model = Image::find()
-            .filter(image::Column::Hash.eq(identifier))
-            .one(&*self.connection)
+            .filter(image::Column::Hash.eq(hash))
+            .one(&*connection)
             .await
             .map_err(|e| AppError::Internal(format!("查询图片失败: {}", e)))?;
 
@@ -204,31 +215,45 @@ impl DatabaseService {
             active_model.access_count = sea_orm::Set(active_model.access_count.unwrap() + 1);
             active_model.last_accessed = sea_orm::Set(Some(Utc::now()));
             
-            active_model.update(&*self.connection)
+            active_model.update(&*connection)
                 .await
                 .map_err(|e| AppError::Internal(format!("更新访问信息失败: {}", e)))?;
+            
+            debug!("图片访问信息更新成功: {}", hash);
+            Ok(true)
+        } else {
+            Ok(false)
         }
-
-        Ok(())
     }
 
-    /// 删除图片记录
-    pub async fn delete_image(&self, identifier: &str) -> Result<bool, AppError> {
+    async fn delete_by_hash(&self, hash: &str) -> Result<bool, AppError> {
+        debug!("删除图片记录: {}", hash);
+        
+        let connection = self.get_connection();
         let result = Image::delete_many()
-            .filter(image::Column::Hash.eq(identifier))
-            .exec(&*self.connection)
+            .filter(image::Column::Hash.eq(hash))
+            .exec(&*connection)
             .await
             .map_err(|e| AppError::Internal(format!("删除图片记录失败: {}", e)))?;
 
-        Ok(result.rows_affected > 0)
+        let deleted = result.rows_affected > 0;
+        if deleted {
+            info!("图片记录删除成功: {}", hash);
+        }
+        
+        Ok(deleted)
     }
 
-    /// 获取统计信息
-    pub async fn get_stats(&self) -> Result<ImageStats, AppError> {
+    async fn get_stats(&self) -> Result<ImageStats, AppError> {
+        debug!("获取图片统计信息");
+        
+        let connection = self.get_connection();
+        let db_backend = connection.get_database_backend();
+
         // 获取基本统计信息
-        let basic_stats = self.connection
+        let basic_stats = connection
             .query_one(Statement::from_string(
-                self.db_backend,
+                db_backend,
                 "SELECT COUNT(*) as total_count, COALESCE(SUM(size), 0) as total_size, COALESCE(AVG(size), 0) as average_size FROM images".to_string()
             ))
             .await
@@ -245,9 +270,9 @@ impl DatabaseService {
         };
 
         // 按类型统计
-        let type_stats = self.connection
+        let type_stats = connection
             .query_all(Statement::from_string(
-                self.db_backend,
+                db_backend,
                 "SELECT mime_type, COUNT(*) as count, COALESCE(SUM(size), 0) as total_size FROM images GROUP BY mime_type".to_string()
             ))
             .await
@@ -263,9 +288,9 @@ impl DatabaseService {
         }
 
         // 按时间统计（按天）
-        let time_stats = self.connection
+        let time_stats = connection
             .query_all(Statement::from_string(
-                self.db_backend,
+                db_backend,
                 "SELECT DATE(created_at) as date, COUNT(*) as count, COALESCE(SUM(size), 0) as total_size FROM images GROUP BY DATE(created_at) ORDER BY date DESC LIMIT 30".to_string()
             ))
             .await
@@ -287,23 +312,5 @@ impl DatabaseService {
             by_type,
             by_time,
         })
-    }
-
-    /// 根据hash查找图片
-    pub async fn find_by_hash(&self, file_hash: &str) -> Result<Option<ImageInfo>, AppError> {
-        let result = Image::find()
-            .filter(image::Column::Hash.eq(file_hash))
-            .one(&*self.connection)
-            .await
-            .map_err(|e| AppError::Internal(format!("根据hash查询图片失败: {}", e)))?;
-
-        Ok(result.map(|model| model.into()))
-    }
-
-    /// 计算文件哈希值
-    pub fn calculate_file_hash(data: &[u8]) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(data);
-        format!("{:x}", hasher.finalize())
     }
 } 

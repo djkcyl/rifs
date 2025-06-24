@@ -2,6 +2,13 @@
 name = "rifs"
 version = "0.1.0"
 edition = "2021"
+description = "Rust图床服务 - 高性能图片存储和转换服务"
+authors = ["djkcyl <cyl@cyllive.cn>"]
+license = "MIT"
+repository = "https://github.com/djkcyl/rifs"
+homepage = "https://github.com/djkcyl/rifs"
+keywords = ["image-server", "rust", "file-upload", "web-service", "image-processing"]
+categories = ["web-programming", "multimedia::images"]
 
 # 构建体积优化配置
 [profile.release]
@@ -31,7 +38,7 @@ strip = true
 axum = { version = "0.8", features = ["multipart", "json", "tokio", "http1", "query"], default-features = false }
 
 # 异步运行时 - 只启用必需的features
-tokio = { version = "1.45", features = ["rt-multi-thread", "net", "fs", "io-util", "macros"], default-features = false }
+tokio = { version = "1.45", features = ["rt-multi-thread", "net", "fs", "io-util", "macros", "signal"], default-features = false }
 
 # HTTP 服务器 - 启用必需features
 tower = { version = "0.5", features = ["util"], default-features = false }
@@ -59,8 +66,20 @@ sea-orm-migration = { version = "1.1", features = ["sqlx-sqlite", "sqlx-postgres
 async-trait = { version = "0.1", default-features = false }
 chrono = { version = "0.4", features = ["serde"], default-features = false }
 
+# 数据库连接池
+sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "sqlite", "postgres", "mysql", "chrono", "uuid"], default-features = false }
+
 # 加密哈希
 sha2 = { version = "0.10", default-features = false }
 
 # 文件类型检测
 infer = { version = "0.19", default-features = false }
+
+# 图片格式支持 - 主流格式编解码器支持
+image = { version = "0.25", features = ["jpeg", "png", "gif", "ico", "webp", "avif", "rayon"], default-features = false }
+
+# WebP处理库 - 支持静态WebP质量控制编码
+webp = { version = "0.3", default-features = false }
+
+# GIF处理库 - 用于检测GIF帧数和提取第一帧
+gif = { version = "0.13", default-features = false }
