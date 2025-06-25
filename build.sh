@@ -1,7 +1,6 @@
 #!/bin/bash
 
 echo "🚀 RIFS 多平台一键构建脚本 (Ubuntu)"
-echo "================================="
 
 # 颜色定义
 RED='\033[0;31m'
@@ -122,13 +121,182 @@ check_tool_status() {
     fi
 }
 
+# 检查Docker Buildx状态
+check_buildx_status() {
+    if command -v docker &> /dev/null && docker buildx version &> /dev/null; then
+        echo -e "${GREEN}✅ 已安装${NC}"
+    else
+        echo -e "${RED}❌ 未安装${NC}"
+    fi
+}
+
+# 检查Docker登录状态
+check_docker_login() {
+    echo -e "${YELLOW}🔐 检查Docker登录状态...${NC}"
+    
+    # 检查是否已登录
+    if ! docker info | grep -q "Username:" 2>/dev/null; then
+        echo -e "${RED}❌ 未登录Docker仓库${NC}"
+        echo -e "${CYAN}💡 请先运行: docker login${NC}"
+        return 1
+    fi
+    
+    # 获取当前登录用户
+    local docker_user=$(docker info 2>/dev/null | grep "Username:" | awk '{print $2}' || echo "unknown")
+    echo -e "${GREEN}✅ 已登录用户: $docker_user${NC}"
+    
+    return 0
+}
+
 # 检查交叉编译工具
 check_cross_tools() {
     echo ""
     echo -e "${BLUE}🔧 交叉编译工具状态:${NC}"
     echo -e "  • mingw-w64 (Windows): $(check_tool_status x86_64-w64-mingw32-gcc)"
     echo -e "  • gcc-aarch64 (ARM64): $(check_tool_status aarch64-linux-gnu-gcc)"
+    echo -e "  • Docker (多架构构建): $(check_tool_status docker)"
+    echo -e "  • Docker Buildx: $(check_buildx_status)"
     echo ""
+}
+
+# 检查Docker是否可用
+check_docker() {
+    if ! command -v docker &> /dev/null; then
+        echo -e "${YELLOW}⚠️  Docker未安装，将跳过Docker构建${NC}"
+        return 1
+    fi
+    
+    if ! docker info &> /dev/null; then
+        echo -e "${YELLOW}⚠️  Docker守护进程未运行，将跳过Docker构建${NC}"
+        return 1
+    fi
+    
+    return 0
+}
+
+# Docker多架构构建函数
+build_docker_images() {
+    local push_enabled=${1:-false}
+    
+    echo ""
+    echo -e "${BLUE}🐳 开始Docker多架构构建...${NC}"
+    echo "========================="
+    
+    # 检查是否有Linux二进制文件
+    local has_linux_x64=false
+    local has_linux_arm64=false
+    
+    if [ -f "$BUILD_DIR/rifs-linux-x64" ]; then
+        has_linux_x64=true
+    fi
+    
+    if [ -f "$BUILD_DIR/rifs-linux-arm64" ]; then
+        has_linux_arm64=true
+    fi
+    
+    if [ "$has_linux_x64" = false ] && [ "$has_linux_arm64" = false ]; then
+        echo -e "${YELLOW}⚠️  没有找到Linux二进制文件，跳过Docker构建${NC}"
+        return 1
+    fi
+    
+    # 获取Docker用户名并设置镜像标签
+    local docker_user=$(docker info 2>/dev/null | grep "Username:" | awk '{print $2}' || echo "")
+    local image_name=""
+    
+    if [ -n "$docker_user" ] && [ "$docker_user" != "unknown" ]; then
+        image_name="$docker_user/rifs"
+    else
+        echo -e "${RED}❌ 无法获取Docker用户名${NC}"
+        return 1
+    fi
+    
+    local image_tag="latest"
+    local full_tag="$image_name:$image_tag"
+    local version_tag="$image_name:v$VERSION"
+    
+    echo -e "${CYAN}📦 镜像标签: $full_tag, $version_tag${NC}"
+    
+    # 检查并设置buildx
+    echo -e "${YELLOW}🔧 设置Docker buildx...${NC}"
+    if ! docker buildx version &> /dev/null; then
+        echo -e "${RED}❌ Docker buildx不可用，无法进行多架构构建${NC}"
+        return 1
+    fi
+    
+    # 创建或使用multiarch builder
+    local builder_name="rifs-multiarch"
+    if ! docker buildx ls | grep -q "$builder_name"; then
+        echo -e "${YELLOW}  创建multiarch builder...${NC}"
+        docker buildx create --name "$builder_name" --driver docker-container --use
+    else
+        echo -e "${GREEN}  使用已存在的multiarch builder${NC}"
+        docker buildx use "$builder_name"
+    fi
+    
+    # 启动builder
+    docker buildx inspect --bootstrap
+    
+    # 准备构建平台列表
+    local platforms=()
+    if [ "$has_linux_x64" = true ]; then
+        platforms+=("linux/amd64")
+    fi
+    if [ "$has_linux_arm64" = true ]; then
+        platforms+=("linux/arm64")
+    fi
+    
+    local platform_list=$(IFS=,; echo "${platforms[*]}")
+    echo -e "${CYAN}🎯 构建平台: $platform_list${NC}"
+    
+    # 根据预设配置确定推送方式
+    local push_flag=""
+    if [ "$push_enabled" = true ]; then
+        push_flag="--push"
+        echo -e "${GREEN}✅ 将推送镜像到仓库${NC}"
+    else
+        push_flag="--load"
+        echo -e "${YELLOW}📱 只构建到本地${NC}"
+    fi
+    
+    # 执行Docker构建
+    echo ""
+    echo -e "${BLUE}🔨 执行Docker多架构构建...${NC}"
+    local build_log=$(mktemp)
+    
+    if docker buildx build \
+        --platform "$platform_list" \
+        --tag "$full_tag" \
+        --tag "$version_tag" \
+        $push_flag \
+        . > "$build_log" 2>&1; then
+        
+        echo -e "${GREEN}✅ Docker多架构构建成功${NC}"
+        rm -f "$build_log"
+        
+        # 显示镜像信息
+        echo ""
+        echo -e "${CYAN}📊 构建的Docker镜像:${NC}"
+        echo -e "  • $full_tag"
+        echo -e "  • $version_tag"
+        echo -e "  • 平台: $platform_list"
+        
+        if [[ $push_flag == "--push" ]]; then
+            echo -e "${GREEN}🚀 镜像已推送到Docker仓库${NC}"
+        else
+            echo -e "${YELLOW}📱 镜像已构建到本地${NC}"
+            echo ""
+            echo -e "${CYAN}本地镜像列表:${NC}"
+            docker images | grep "$image_name" | head -5
+        fi
+        
+        return 0
+    else
+        echo -e "${RED}❌ Docker构建失败${NC}"
+        echo -e "${RED}错误日志:${NC}"
+        cat "$build_log"
+        rm -f "$build_log"
+        return 1
+    fi
 }
 
 # 构建函数
@@ -223,7 +391,49 @@ main() {
     # 检查工具
     check_cross_tools
     
+    # Docker构建配置
+    local docker_build_enabled=false
+    local docker_push_enabled=false
+    
+    echo ""
+    echo -e "${BLUE}🐳 Docker多架构构建配置${NC}"
+    echo "========================="
+    
+    # 检查Docker可用性
+    if check_docker; then
+        read -p "是否启用Docker多架构构建? [y/N]: " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            docker_build_enabled=true
+            echo ""
+            read -p "是否推送镜像到Docker仓库? [y/N]: " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                # 检查登录状态
+                if check_docker_login; then
+                    docker_push_enabled=true
+                    echo -e "${GREEN}✅ 将推送镜像到仓库${NC}"
+                else
+                    echo ""
+                    read -p "未登录Docker，是否继续只构建到本地? [y/N]: " -n 1 -r
+                    echo
+                    if [[ $REPLY =~ ^[Yy]$ ]]; then
+                        echo -e "${YELLOW}📱 将只构建到本地${NC}"
+                    else
+                        docker_build_enabled=false
+                        echo -e "${RED}❌ 用户取消Docker构建${NC}"
+                    fi
+                fi
+            else
+                echo -e "${YELLOW}📱 将只构建到本地${NC}"
+            fi
+        fi
+    else
+        echo -e "${YELLOW}⚠️  Docker不可用，跳过Docker构建${NC}"
+    fi
+    
     # 开始构建所有目标
+    echo ""
     echo -e "${GREEN}🚀 开始多平台构建...${NC}"
     echo "==================="
     
@@ -236,8 +446,12 @@ main() {
     # 复制其他文件
     echo ""
     echo -e "${CYAN}📄 复制附加文件...${NC}"
-    cp config.example.toml $BUILD_DIR/config.toml
     cp README.md $BUILD_DIR/
+    
+    # Docker多架构构建
+    if [ "$docker_build_enabled" = true ]; then
+        build_docker_images "$docker_push_enabled"
+    fi
     
     # 生成构建信息
     echo -e "${CYAN}📊 生成构建信息...${NC}"
@@ -284,7 +498,45 @@ EOF
 
 依赖说明:
 - Windows交叉编译需要: mingw-w64
-- ARM64交叉编译需要: gcc-aarch64-linux-gnu  
+- ARM64交叉编译需要: gcc-aarch64-linux-gnu
+- Docker多架构构建需要: docker, docker-buildx
+
+Docker镜像:
+EOF
+
+    # 如果启用了Docker，添加Docker镜像信息
+    if check_docker &>/dev/null; then
+        local docker_user=$(docker info 2>/dev/null | grep "Username:" | awk '{print $2}' || echo "")
+        if [ -n "$docker_user" ] && [ "$docker_user" != "unknown" ]; then
+            cat >> $BUILD_DIR/build-info.txt << EOF
+如果启用了Docker构建，可以使用以下镜像:
+- $docker_user/rifs:latest (最新版本)
+- $docker_user/rifs:v$VERSION (当前版本)
+- 支持平台: linux/amd64, linux/arm64
+
+使用Docker运行:
+docker run --rm --pull always -d \
+  -p 3000:3000 \
+  -v ./uploads:/app/uploads \
+  -v ./cache:/app/cache \
+  -v ./data:/app/data \
+  -v ./config.toml:/app/config.toml \
+  $docker_user/rifs:latest
+EOF
+        else
+            cat >> $BUILD_DIR/build-info.txt << EOF
+Docker镜像构建需要先登录Docker Hub:
+docker login
+然后重新运行构建脚本进行Docker构建
+EOF
+        fi
+    else
+        cat >> $BUILD_DIR/build-info.txt << EOF
+Docker镜像构建需要安装Docker和Docker Buildx
+EOF
+    fi
+
+    cat >> $BUILD_DIR/build-info.txt << EOF
 EOF
 
     # 显示构建结果
@@ -296,6 +548,11 @@ EOF
     echo -e "  • ${GREEN}成功: $BUILT_COUNT 个平台${NC}"
     echo -e "  • ${RED}失败: $FAILED_COUNT 个平台${NC}"
     echo -e "  • ${YELLOW}跳过: $SKIPPED_COUNT 个平台${NC}"
+    
+    # 检查Docker构建结果
+    if [ "$docker_build_enabled" = true ]; then
+        echo -e "  • ${BLUE}Docker: 已构建多架构镜像${NC}"
+    fi
     echo ""
     echo -e "${CYAN}📁 构建文件位置: $BUILD_DIR/${NC}"
     echo ""

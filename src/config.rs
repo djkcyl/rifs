@@ -301,17 +301,21 @@ max_lifetime = "30m"
             match Self::load_from_file("config") {
                 Ok(config) => config,
                 Err(_) => {
-                    // 检查是否在容器环境中（通过检查常见的容器环境变量）
+                    // 检查是否在容器环境中（通过检查常见的容器环境变量或/.dockerenv文件）
                     let is_container = std::env::var("RIFS_SERVER_HOST").is_ok()
                         || std::env::var("CONTAINER").is_ok()
-                        || std::env::var("KUBERNETES_SERVICE_HOST").is_ok();
+                        || std::env::var("KUBERNETES_SERVICE_HOST").is_ok()
+                        || std::path::Path::new("/.dockerenv").exists()
+                        || std::path::Path::new("/proc/1/cgroup").exists()
+                            && std::fs::read_to_string("/proc/1/cgroup")
+                                .map_or(false, |content| content.contains("docker"));
 
                     if is_container {
-                        // 容器环境，直接使用环境变量配置
-                        eprintln!("🐳 检测到容器环境，使用环境变量配置");
+                        // 容器环境，使用环境变量配置（如果有的话），否则使用默认配置
+                        eprintln!("🐳 检测到容器环境，使用环境变量配置启动");
                         Self::load_from_env_only()?
                     } else {
-                        // 非容器环境，创建默认配置文件
+                        // 非容器环境，创建默认配置文件后退出
                         let config_file_path = "config.toml";
 
                         eprintln!("⚠️  未找到配置文件: {}", config_file_path);

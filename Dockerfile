@@ -1,6 +1,6 @@
 # 多阶段构建 Dockerfile for RIFS
 # 第一阶段：构建环境
-FROM rust:1.75-slim as builder
+FROM rust:1.87-slim AS builder
 
 # 安装构建依赖
 RUN apt-get update && apt-get install -y \
@@ -13,14 +13,14 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # 复制项目文件
-COPY Cargo.toml Cargo.lock ./
+COPY Cargo.toml ./
 COPY src/ ./src/
 
 # 构建应用程序（Release模式）
 RUN cargo build --release
 
 # 第二阶段：运行环境
-FROM debian:bookworm-slim as runtime
+FROM debian:bookworm-slim AS runtime
 
 # 安装运行时依赖
 RUN apt-get update && apt-get install -y \
@@ -42,6 +42,9 @@ COPY --from=builder /app/target/release/rifs /app/rifs
 # 创建必要的目录
 RUN mkdir -p /app/uploads /app/cache /app/data \
     && chown -R rifs:rifs /app
+
+# 设置环境变量标识容器环境
+ENV CONTAINER=true
 
 # 切换到非root用户
 USER rifs

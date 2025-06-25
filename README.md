@@ -184,10 +184,12 @@ cargo run --release
 ### Docker 运行
 
 ```bash
-docker run -d \
+docker run --rm --pull always -d \
   -p 3000:3000 \
   -v ./uploads:/app/uploads \
   -v ./cache:/app/cache \
+  -v ./data:/app/data \
+  -v ./config.toml:/app/config.toml \
   djkcyl/rifs:latest
 ```
 
