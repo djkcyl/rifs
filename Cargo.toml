@@ -41,7 +41,7 @@ axum = { version = "0.8", features = ["multipart", "json", "tokio", "http1", "qu
 tokio = { version = "1.45", features = ["rt-multi-thread", "net", "fs", "io-util", "macros", "signal"], default-features = false }
 
 # HTTP 服务器 - 启用必需features
-tower = { version = "0.5", features = ["util"], default-features = false }
+tower = { version = "0.5", features = ["util", "timeout"], default-features = false }
 tower-http = { version = "0.6", features = ["cors", "trace"], default-features = false }
 
 # 序列化
@@ -54,7 +54,8 @@ thiserror = { version = "2.0" }
 
 # 日志
 tracing = { version = "0.1", features = ["std"], default-features = false }
-tracing-subscriber = { version = "0.3", features = ["fmt", "ansi", "std"], default-features = false }
+tracing-subscriber = { version = "0.3", features = ["fmt", "ansi", "std", "json", "time"], default-features = false }
+tracing-appender = { version = "0.2", features = ["parking_lot"] }
 
 # 配置文件
 config = { version = "0.15", features = ["toml"], default-features = false }

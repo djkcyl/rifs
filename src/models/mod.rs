@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 /// 图片信息结构体
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -120,7 +120,6 @@ pub struct ImageTransformParams {
     pub no_alpha: bool,
     /// 去除透明通道后的背景色
     pub background_color: Option<BackgroundColor>,
-
 }
 
 /// 背景色选项
@@ -153,13 +152,11 @@ impl ImageTransformParams {
             if Self::is_valid_format(param) {
                 // 图片格式
                 params.format = Some(param.to_lowercase());
-            } else if param.starts_with("na") {
+            } else if let Some(bg_part) = param.strip_prefix("na") {
                 // 去除透明通道及背景色设置
                 params.no_alpha = true;
-                
-                if param.len() > 2 {
-                    let bg_part = &param[2..]; // 获取na后面的部分
-                    
+
+                if !bg_part.is_empty() {
                     if bg_part == "w" {
                         // naw - 白色背景
                         params.background_color = Some(BackgroundColor::White);
@@ -176,19 +173,19 @@ impl ImageTransformParams {
                     // 只有na，使用默认白色背景
                     params.background_color = Some(BackgroundColor::White);
                 }
-            } else if param.starts_with('w') {
+            } else if let Some(width_str) = param.strip_prefix('w') {
                 // 宽度参数
-                if let Ok(width) = param[1..].parse::<u32>() {
+                if let Ok(width) = width_str.parse::<u32>() {
                     params.width = Some(width);
                 }
-            } else if param.starts_with('h') {
+            } else if let Some(height_str) = param.strip_prefix('h') {
                 // 高度参数
-                if let Ok(height) = param[1..].parse::<u32>() {
+                if let Ok(height) = height_str.parse::<u32>() {
                     params.height = Some(height);
                 }
-            } else if param.starts_with('q') {
+            } else if let Some(quality_str) = param.strip_prefix('q') {
                 // 质量参数
-                if let Ok(quality) = param[1..].parse::<u8>() {
+                if let Ok(quality) = quality_str.parse::<u8>() {
                     if quality > 0 && quality <= 100 {
                         params.quality = Some(quality);
                     }
@@ -201,18 +198,18 @@ impl ImageTransformParams {
 
     /// 检查是否为有效的图片格式
     fn is_valid_format(format: &str) -> bool {
-        matches!(format.to_lowercase().as_str(), 
-            "jpeg" | "jpg" | "png" | "gif" | "webp" | 
-            "avif" | "ico"
+        matches!(
+            format.to_lowercase().as_str(),
+            "jpeg" | "jpg" | "png" | "gif" | "webp" | "avif" | "ico"
         )
     }
 
     /// 检查是否需要进行转换
     pub fn needs_transform(&self) -> bool {
-        self.width.is_some() 
-            || self.height.is_some() 
-            || self.format.is_some() 
-            || self.quality.is_some() 
+        self.width.is_some()
+            || self.height.is_some()
+            || self.format.is_some()
+            || self.quality.is_some()
             || self.no_alpha
     }
 
@@ -224,16 +221,17 @@ impl ImageTransformParams {
                 "jpeg" | "jpg" => "image/jpeg",
                 "png" => "image/png",
                 "gif" => "image/gif",
-                
+
                 // 现代格式
                 "webp" => "image/webp",
                 "avif" => "image/avif",
-                
+
                 // 图标格式
                 "ico" => "image/x-icon",
-                
+
                 _ => "image/jpeg", // 默认JPEG
-            }.to_string()
+            }
+            .to_string()
         })
     }
 
@@ -242,14 +240,11 @@ impl ImageTransformParams {
         if hex.len() != 7 || !hex.starts_with('#') {
             return Err("十六进制颜色格式必须为#RRGGBB".to_string());
         }
-        
-        let r = u8::from_str_radix(&hex[1..3], 16)
-            .map_err(|_| "无效的红色分量".to_string())?;
-        let g = u8::from_str_radix(&hex[3..5], 16)
-            .map_err(|_| "无效的绿色分量".to_string())?;
-        let b = u8::from_str_radix(&hex[5..7], 16)
-            .map_err(|_| "无效的蓝色分量".to_string())?;
-        
+
+        let r = u8::from_str_radix(&hex[1..3], 16).map_err(|_| "无效的红色分量".to_string())?;
+        let g = u8::from_str_radix(&hex[3..5], 16).map_err(|_| "无效的绿色分量".to_string())?;
+        let b = u8::from_str_radix(&hex[5..7], 16).map_err(|_| "无效的蓝色分量".to_string())?;
+
         Ok((r, g, b))
     }
 }
@@ -316,8 +311,8 @@ impl CacheCleanupPolicy {
     pub fn from_config(config: &crate::config::AppConfig) -> Self {
         Self {
             max_entries: Some(config.cache.max_cache_entries),
-            max_total_size: Some(config.cache.max_cache_size),
-            max_age: Some(config.cache.max_age),
+            max_total_size: Some(config.cache.max_cache_size.as_bytes()),
+            max_age: Some(config.cache.max_cache_age.as_seconds()),
             min_heat_score: Some(config.cache.min_heat_score),
             enable_lru: true,
         }
@@ -335,4 +330,4 @@ pub struct CacheCleanupResult {
     pub applied_policies: Vec<String>,
     /// 清理耗时（毫秒）
     pub duration_ms: u64,
-} 
+}

@@ -1,6 +1,6 @@
-use std::sync::Arc;
-use sea_orm::{DatabaseConnection, TransactionTrait, DbErr};
 use async_trait::async_trait;
+use sea_orm::{DatabaseConnection, DbErr, TransactionTrait};
+use std::sync::Arc;
 
 use crate::utils::AppError;
 
@@ -9,11 +9,15 @@ use crate::utils::AppError;
 pub trait Repository: Send + Sync {
     /// 获取数据库连接
     fn get_connection(&self) -> Arc<DatabaseConnection>;
-    
+
     /// 执行事务
     async fn transaction<F, R>(&self, func: F) -> Result<R, AppError>
     where
-        F: for<'c> FnOnce(&'c sea_orm::DatabaseTransaction) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<R, DbErr>> + Send + 'c>> + Send,
+        F: for<'c> FnOnce(
+                &'c sea_orm::DatabaseTransaction,
+            ) -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = Result<R, DbErr>> + Send + 'c>,
+            > + Send,
         R: Send;
 }
 
@@ -37,7 +41,11 @@ impl Repository for BaseRepository {
 
     async fn transaction<F, R>(&self, func: F) -> Result<R, AppError>
     where
-        F: for<'c> FnOnce(&'c sea_orm::DatabaseTransaction) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<R, DbErr>> + Send + 'c>> + Send,
+        F: for<'c> FnOnce(
+                &'c sea_orm::DatabaseTransaction,
+            ) -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = Result<R, DbErr>> + Send + 'c>,
+            > + Send,
         R: Send,
     {
         self.connection
@@ -54,4 +62,4 @@ pub struct PageResult<T> {
     pub items: Vec<T>,
     /// 总数量
     pub total: u64,
-} 
+}

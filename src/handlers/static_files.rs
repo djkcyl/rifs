@@ -1,7 +1,4 @@
-use axum::{
-    http::StatusCode,
-    response::IntoResponse,
-};
+use axum::{http::StatusCode, response::IntoResponse};
 
 /// 内嵌的HTML文档内容
 pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
@@ -1620,5 +1617,9 @@ pub const CACHE_MANAGEMENT_HTML: &str = r#"<!DOCTYPE html>
 
 /// API文档根路径
 pub async fn api_docs() -> impl IntoResponse {
-    (StatusCode::OK, [("content-type", "text/html; charset=utf-8")], INDEX_HTML)
-} 
+    (
+        StatusCode::OK,
+        [("content-type", "text/html; charset=utf-8")],
+        INDEX_HTML,
+    )
+}

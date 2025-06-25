@@ -1,7 +1,7 @@
 pub mod base;
-pub mod image;
 pub mod cache;
+pub mod image;
 
 pub use base::*;
+pub use cache::*;
 pub use image::*;
-pub use cache::*; 

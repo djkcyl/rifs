@@ -8,22 +8,22 @@ use crate::models::ErrorResponse;
 pub enum AppError {
     #[error("文件IO错误: {0}")]
     FileIo(#[from] std::io::Error),
-    
+
     #[error("不支持的文件类型")]
     UnsupportedFileType,
-    
+
     #[error("文件过大，最大允许 {max_size} 字节")]
     FileTooLarge { max_size: u64 },
-    
+
     #[error("文件不存在")]
     FileNotFound,
-    
+
     #[error("无效的文件")]
     InvalidFile,
-    
+
     #[error("服务器内部错误: {0}")]
     Internal(String),
-    
+
     #[error("请求格式错误: {0}")]
     BadRequest(String),
 }
@@ -91,4 +91,4 @@ impl IntoResponse for AppError {
 
         (status, Json(error_response)).into_response()
     }
-} 
+}

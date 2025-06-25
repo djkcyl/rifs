@@ -16,7 +16,7 @@ pub async fn health_check_detailed(
 
     // 执行应用程序健康检查
     let health_status = app_state.health_check().await?;
-    
+
     // 获取应用统计信息
     let app_stats = app_state.get_app_stats().await?;
 
@@ -36,7 +36,6 @@ pub async fn health_check_detailed(
             "overall": match health_status.overall {
                 crate::app_state::OverallStatus::Healthy => "healthy",
                 crate::app_state::OverallStatus::Unhealthy => "unhealthy",
-                crate::app_state::OverallStatus::Degraded => "degraded",
             }
         },
         "stats": {
@@ -53,12 +52,12 @@ pub async fn health_check_detailed(
 
 /// 系统状态统计接口
 pub async fn get_system_stats(
-    State(app_state): State<AppState>
+    State(app_state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let health_status = app_state.health_check().await?;
     let app_stats = app_state.get_app_stats().await?;
     let config = app_state.config();
-    
+
     let response = json!({
         "success": true,
         "message": "系统统计信息获取成功",
@@ -67,7 +66,6 @@ pub async fn get_system_stats(
                 "overall": match health_status.overall {
                     crate::app_state::OverallStatus::Healthy => "healthy",
                     crate::app_state::OverallStatus::Unhealthy => "unhealthy",
-                    crate::app_state::OverallStatus::Degraded => "degraded",
                 },
                 "database": match health_status.database {
                     crate::app_state::ComponentStatus::Healthy => "healthy",
@@ -90,12 +88,12 @@ pub async fn get_system_stats(
                 },
                 "storage": {
                     "upload_dir": config.storage.upload_dir,
-                    "max_file_size": config.storage.max_file_size,
+                    "max_file_size": config.storage.max_file_size.as_bytes(),
                 },
                 "cache": {
                     "enable_transform_cache": config.cache.enable_transform_cache,
                     "max_cache_entries": config.cache.max_cache_entries,
-                    "max_cache_size": config.cache.max_cache_size,
+                    "max_cache_size": config.cache.max_cache_size.as_bytes(),
                 }
             },
             "timestamp": std::time::SystemTime::now()
@@ -106,4 +104,4 @@ pub async fn get_system_stats(
     });
 
     Ok(Json(response))
-} 
+}

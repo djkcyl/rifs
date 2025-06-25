@@ -1,15 +1,15 @@
-use std::sync::Arc;
-use std::path::Path;
-use sea_orm::DatabaseConnection;
 use chrono::Utc;
-use sha2::{Sha256, Digest};
+use sea_orm::DatabaseConnection;
+use sha2::{Digest, Sha256};
+use std::path::Path;
+use std::sync::Arc;
 use tokio::fs;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
-use crate::repositories::{CacheRepository, CacheRepositoryTrait};
-use crate::models::{CacheInfo, CacheStats, CacheCleanupPolicy, CacheCleanupResult};
-use crate::utils::AppError;
 use crate::config::AppConfig;
+use crate::models::{CacheCleanupPolicy, CacheCleanupResult, CacheInfo, CacheStats};
+use crate::repositories::{CacheRepository, CacheRepositoryTrait};
+use crate::utils::AppError;
 
 /// 缓存服务
 pub struct CacheService {
@@ -22,7 +22,7 @@ impl CacheService {
     pub fn new(connection: Arc<DatabaseConnection>) -> Result<Self, AppError> {
         let config = AppConfig::get();
         let cache_dir = config.cache.cache_dir.clone();
-        
+
         Ok(Self {
             cache_repo: CacheRepository::new(connection),
             cache_dir,
@@ -32,7 +32,8 @@ impl CacheService {
     /// 异步初始化缓存目录
     pub async fn ensure_cache_dir(&self) -> Result<(), AppError> {
         // 确保缓存目录存在
-        tokio::fs::create_dir_all(&self.cache_dir).await
+        tokio::fs::create_dir_all(&self.cache_dir)
+            .await
             .map_err(|e| AppError::Internal(format!("创建缓存目录失败: {}", e)))?;
         Ok(())
     }
@@ -51,7 +52,7 @@ impl CacheService {
         // 基于缓存键的前几位创建子目录以避免单个目录文件过多
         let prefix = &cache_key[..2];
         let middle = &cache_key[2..4];
-        
+
         let ext = match mime_type {
             "image/jpeg" => "jpg",
             "image/png" => "png",
@@ -60,8 +61,11 @@ impl CacheService {
             "image/avif" => "avif",
             _ => "cache",
         };
-        
-        format!("{}/{}/{}/{}.{}", self.cache_dir, prefix, middle, cache_key, ext)
+
+        format!(
+            "{}/{}/{}/{}.{}",
+            self.cache_dir, prefix, middle, cache_key, ext
+        )
     }
 
     /// 检查缓存是否存在
@@ -83,12 +87,13 @@ impl CacheService {
 
     /// 读取缓存文件内容
     pub async fn read_cache(&self, cache_info: &CacheInfo) -> Result<Vec<u8>, AppError> {
-        let data = fs::read(&cache_info.file_path).await
+        let data = fs::read(&cache_info.file_path)
+            .await
             .map_err(|e| AppError::Internal(format!("读取缓存文件失败: {}", e)))?;
-        
+
         // 更新访问信息
         self.cache_repo.update_access(&cache_info.cache_key).await?;
-        
+
         Ok(data)
     }
 
@@ -101,7 +106,7 @@ impl CacheService {
         mime_type: &str,
     ) -> Result<CacheInfo, AppError> {
         let config = AppConfig::get();
-        
+
         // 检查是否启用缓存
         if !config.cache.enable_transform_cache {
             return Err(AppError::Internal("缓存未启用".to_string()));
@@ -109,15 +114,17 @@ impl CacheService {
 
         let cache_key = Self::generate_cache_key(original_hash, transform_params);
         let file_path = self.get_cache_file_path(&cache_key, mime_type);
-        
+
         // 确保缓存子目录存在
         if let Some(parent) = Path::new(&file_path).parent() {
-            fs::create_dir_all(parent).await
+            fs::create_dir_all(parent)
+                .await
                 .map_err(|e| AppError::Internal(format!("创建缓存目录失败: {}", e)))?;
         }
 
         // 写入缓存文件
-        fs::write(&file_path, data).await
+        fs::write(&file_path, data)
+            .await
             .map_err(|e| AppError::Internal(format!("写入缓存文件失败: {}", e)))?;
 
         // 创建缓存信息
@@ -148,13 +155,16 @@ impl CacheService {
     /// 自动清理缓存（根据配置策略）
     pub async fn auto_cleanup(&self) -> Result<CacheCleanupResult, AppError> {
         let config = AppConfig::get();
-        
-        let policy = CacheCleanupPolicy::from_config(&config);
+
+        let policy = CacheCleanupPolicy::from_config(config);
         self.cleanup_with_policy(&policy).await
     }
 
     /// 根据策略清理缓存
-    pub async fn cleanup_with_policy(&self, policy: &CacheCleanupPolicy) -> Result<CacheCleanupResult, AppError> {
+    pub async fn cleanup_with_policy(
+        &self,
+        policy: &CacheCleanupPolicy,
+    ) -> Result<CacheCleanupResult, AppError> {
         let mut total_cleaned = 0;
         let mut total_freed = 0;
 
@@ -166,9 +176,12 @@ impl CacheService {
             if stats.total_size as u64 > max_size {
                 let target_size = (max_size as f64 * 0.8) as u64; // 清理到80%
                 let to_free = (stats.total_size as u64) - target_size;
-                
+
                 // 获取LRU候选项进行清理
-                let candidates = self.cache_repo.find_cleanup_candidates(None, Some(100)).await?;
+                let candidates = self
+                    .cache_repo
+                    .find_cleanup_candidates(None, Some(100))
+                    .await?;
                 let (cleaned, freed) = self.cleanup_candidates(candidates, to_free).await?;
                 total_cleaned += cleaned;
                 total_freed += freed;
@@ -179,8 +192,11 @@ impl CacheService {
         if let Some(max_count) = policy.max_entries {
             if stats.total_count as u64 > max_count {
                 let to_remove = (stats.total_count as u64) - ((max_count as f64) * 0.8) as u64; // 清理到80%
-                
-                let candidates = self.cache_repo.find_cleanup_candidates(None, Some(to_remove)).await?;
+
+                let candidates = self
+                    .cache_repo
+                    .find_cleanup_candidates(None, Some(to_remove))
+                    .await?;
                 let (cleaned, freed) = self.cleanup_candidates(candidates, u64::MAX).await?;
                 total_cleaned += cleaned;
                 total_freed += freed;
@@ -190,7 +206,10 @@ impl CacheService {
         // 3. 按时间清理（删除过期项）
         if let Some(max_age) = policy.max_age {
             let max_age_seconds = max_age as i64;
-            let candidates = self.cache_repo.find_cleanup_candidates(Some(max_age_seconds), None).await?;
+            let candidates = self
+                .cache_repo
+                .find_cleanup_candidates(Some(max_age_seconds), None)
+                .await?;
             let (cleaned, freed) = self.cleanup_candidates(candidates, u64::MAX).await?;
             total_cleaned += cleaned;
             total_freed += freed;
@@ -223,7 +242,7 @@ impl CacheService {
 
         for cache_info in candidates {
             if freed_space >= max_free_bytes {
-                        break;
+                break;
             }
 
             // 删除文件
@@ -247,15 +266,15 @@ impl CacheService {
     /// 清理所有缓存
     pub async fn clear_all(&self) -> Result<CacheCleanupResult, AppError> {
         let stats = self.cache_repo.get_stats().await?;
-        
+
         // 删除所有数据库记录
         let deleted_count = self.cache_repo.clear_all().await?;
-        
+
         // 删除缓存目录
         if let Err(e) = fs::remove_dir_all(&self.cache_dir).await {
             warn!("删除缓存目录失败: {} - {}", self.cache_dir, e);
         }
-        
+
         // 重新创建缓存目录
         if let Err(e) = fs::create_dir_all(&self.cache_dir).await {
             error!("重新创建缓存目录失败: {} - {}", self.cache_dir, e);
@@ -319,7 +338,7 @@ impl CacheService {
 
         // 4. 执行常规的策略清理
         let config = AppConfig::get();
-        let policy = CacheCleanupPolicy::from_config(&config);
+        let policy = CacheCleanupPolicy::from_config(config);
         let regular_result = self.cleanup_with_policy(&policy).await?;
         total_cleaned += regular_result.cleaned_count;
         total_freed += regular_result.freed_space;
@@ -340,30 +359,34 @@ impl CacheService {
     pub async fn should_cleanup_by_heat(&self) -> Result<bool, AppError> {
         let config = AppConfig::get();
         let stats = self.cache_repo.get_stats().await?;
-        
+
         // 计算当前空间使用率
-        let space_usage_ratio = stats.total_size as f64 / config.cache.max_cache_size as f64;
-        
-        info!("当前缓存空间使用率: {:.1}% ({} / {} 字节)", 
-            space_usage_ratio * 100.0, 
-            stats.total_size, 
-            config.cache.max_cache_size
+        let space_usage_ratio =
+            stats.total_size as f64 / config.cache.max_cache_size.as_bytes() as f64;
+
+        info!(
+            "当前缓存空间使用率: {:.1}% ({} / {} 字节)",
+            space_usage_ratio * 100.0,
+            stats.total_size,
+            config.cache.max_cache_size.as_bytes()
         );
-        
+
         let should_cleanup = space_usage_ratio >= config.cache.space_threshold_percent;
-        
+
         if should_cleanup {
-            info!("空间使用率 {:.1}% 超过阈值 {:.1}%，将触发基于热度的清理", 
-                space_usage_ratio * 100.0, 
+            info!(
+                "空间使用率 {:.1}% 超过阈值 {:.1}%，将触发基于热度的清理",
+                space_usage_ratio * 100.0,
                 config.cache.space_threshold_percent * 100.0
             );
         } else {
-            info!("空间使用率 {:.1}% 未超过阈值 {:.1}%，跳过基于热度的清理", 
-                space_usage_ratio * 100.0, 
+            info!(
+                "空间使用率 {:.1}% 未超过阈值 {:.1}%，跳过基于热度的清理",
+                space_usage_ratio * 100.0,
                 config.cache.space_threshold_percent * 100.0
             );
         }
-        
+
         Ok(should_cleanup)
     }
 
@@ -371,7 +394,7 @@ impl CacheService {
     pub async fn cleanup_zero_heat_caches(&self) -> Result<(u64, u64), AppError> {
         // 获取低热度缓存候选项
         let low_heat_caches = self.cache_repo.cleanup_low_heat_caches().await?;
-        
+
         // 筛选出完全无热度的缓存（随时可清理）
         let zero_heat_caches: Vec<CacheInfo> = low_heat_caches
             .into_iter()
@@ -383,7 +406,10 @@ impl CacheService {
             return Ok((0, 0));
         }
 
-        info!("找到 {} 个完全无热度的缓存，准备清理", zero_heat_caches.len());
+        info!(
+            "找到 {} 个完全无热度的缓存，准备清理",
+            zero_heat_caches.len()
+        );
 
         // 完全无热度的缓存可以全部清理，不受空间限制
         self.cleanup_candidates(zero_heat_caches, u64::MAX).await
@@ -395,39 +421,46 @@ impl CacheService {
         if !self.should_cleanup_by_heat().await? {
             return Ok((0, 0)); // 空间充足，不需要清理
         }
-        
+
         let config = AppConfig::get();
-        
+
         // 获取低热度缓存候选项
         let low_heat_caches = self.cache_repo.cleanup_low_heat_caches().await?;
-        
+
         // 筛选出热度低于阈值但不为零的缓存
         let threshold_heat_caches: Vec<CacheInfo> = low_heat_caches
             .into_iter()
-            .filter(|cache| cache.heat_score > 0.001 && cache.heat_score < config.cache.min_heat_score)
+            .filter(|cache| {
+                cache.heat_score > 0.001 && cache.heat_score < config.cache.min_heat_score
+            })
             .collect();
 
         if threshold_heat_caches.is_empty() {
-            info!("没有找到低热度缓存（热度在0.001到{}之间）", config.cache.min_heat_score);
+            info!(
+                "没有找到低热度缓存（热度在0.001到{}之间）",
+                config.cache.min_heat_score
+            );
             return Ok((0, 0));
         }
 
-        info!("找到 {} 个低热度缓存，准备清理", threshold_heat_caches.len());
+        info!(
+            "找到 {} 个低热度缓存，准备清理",
+            threshold_heat_caches.len()
+        );
 
         // 计算目标清理大小
         let target_usage = config.cache.space_threshold_percent * 0.9; // 清理到阈值的90%
-        let target_size = (config.cache.max_cache_size as f64 * target_usage) as u64;
+        let target_size = (config.cache.max_cache_size.as_bytes() as f64 * target_usage) as u64;
         let current_size = self.cache_repo.get_stats().await?.total_size as u64;
-        
-        let max_cleanup_size = if current_size > target_size {
-            current_size - target_size
-        } else {
-            0
-        };
 
-        info!("当前大小: {} 字节, 目标大小: {} 字节, 最大清理: {} 字节", 
-            current_size, target_size, max_cleanup_size);
+        let max_cleanup_size = current_size.saturating_sub(target_size);
 
-        self.cleanup_candidates(threshold_heat_caches, max_cleanup_size).await
+        info!(
+            "当前大小: {} 字节, 目标大小: {} 字节, 最大清理: {} 字节",
+            current_size, target_size, max_cleanup_size
+        );
+
+        self.cleanup_candidates(threshold_heat_caches, max_cleanup_size)
+            .await
     }
-} 
+}

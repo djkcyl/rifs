@@ -1,16 +1,15 @@
-use std::sync::Arc;
-use sea_orm::{
-    DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
-    ColumnTrait, ActiveModelTrait, PaginatorTrait, Condition,
-    ConnectionTrait, Statement
-};
-use chrono::Utc;
 use async_trait::async_trait;
-use tracing::{info, debug};
+use chrono::Utc;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, EntityTrait,
+    PaginatorTrait, QueryFilter, QueryOrder, Statement,
+};
+use std::sync::Arc;
+use tracing::{debug, info};
 
 use crate::entities::{image, Image};
-use crate::models::{ImageInfo, ImageQuery, ImageStats, TypeStat, TimeStat};
-use crate::repositories::{Repository, BaseRepository, PageResult};
+use crate::models::{ImageInfo, ImageQuery, ImageStats, TimeStat, TypeStat};
+use crate::repositories::{BaseRepository, PageResult, Repository};
 use crate::utils::AppError;
 
 /// 图片仓储接口
@@ -18,19 +17,19 @@ use crate::utils::AppError;
 pub trait ImageRepositoryTrait: Repository {
     /// 插入新的图片记录
     async fn insert(&self, image_info: &ImageInfo) -> Result<(), AppError>;
-    
+
     /// 根据hash获取图片信息
     async fn find_by_hash(&self, hash: &str) -> Result<Option<ImageInfo>, AppError>;
-    
+
     /// 分页查询图片列表
     async fn find_by_query(&self, query: &ImageQuery) -> Result<PageResult<ImageInfo>, AppError>;
-    
+
     /// 更新图片访问信息
     async fn update_access(&self, hash: &str) -> Result<bool, AppError>;
-    
+
     /// 删除图片记录
     async fn delete_by_hash(&self, hash: &str) -> Result<bool, AppError>;
-    
+
     /// 获取统计信息
     async fn get_stats(&self) -> Result<ImageStats, AppError>;
 }
@@ -80,10 +79,14 @@ impl ImageRepository {
     }
 
     /// 应用排序
-    fn apply_ordering(&self, select: sea_orm::Select<Image>, query: &ImageQuery) -> sea_orm::Select<Image> {
+    fn apply_ordering(
+        &self,
+        select: sea_orm::Select<Image>,
+        query: &ImageQuery,
+    ) -> sea_orm::Select<Image> {
         let order_by = query.order_by.as_deref().unwrap_or("created_at");
         let order_dir = query.order_dir.as_deref().unwrap_or("DESC");
-        
+
         match order_by {
             "hash" => {
                 if order_dir.to_uppercase() == "ASC" {
@@ -91,28 +94,28 @@ impl ImageRepository {
                 } else {
                     select.order_by_desc(image::Column::Hash)
                 }
-            },
+            }
             "size" => {
                 if order_dir.to_uppercase() == "ASC" {
                     select.order_by_asc(image::Column::Size)
                 } else {
                     select.order_by_desc(image::Column::Size)
                 }
-            },
+            }
             "created_at" | "upload_time" => {
                 if order_dir.to_uppercase() == "ASC" {
                     select.order_by_asc(image::Column::CreatedAt)
                 } else {
                     select.order_by_desc(image::Column::CreatedAt)
                 }
-            },
+            }
             "access_count" => {
                 if order_dir.to_uppercase() == "ASC" {
                     select.order_by_asc(image::Column::AccessCount)
                 } else {
                     select.order_by_desc(image::Column::AccessCount)
                 }
-            },
+            }
             _ => {
                 if order_dir.to_uppercase() == "ASC" {
                     select.order_by_asc(image::Column::CreatedAt)
@@ -132,7 +135,11 @@ impl Repository for ImageRepository {
 
     async fn transaction<F, R>(&self, func: F) -> Result<R, AppError>
     where
-        F: for<'c> FnOnce(&'c sea_orm::DatabaseTransaction) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<R, sea_orm::DbErr>> + Send + 'c>> + Send,
+        F: for<'c> FnOnce(
+                &'c sea_orm::DatabaseTransaction,
+            ) -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = Result<R, sea_orm::DbErr>> + Send + 'c>,
+            > + Send,
         R: Send,
     {
         self.base.transaction(func).await
@@ -143,11 +150,12 @@ impl Repository for ImageRepository {
 impl ImageRepositoryTrait for ImageRepository {
     async fn insert(&self, image_info: &ImageInfo) -> Result<(), AppError> {
         debug!("插入图片记录: {}", image_info.hash);
-        
+
         let active_model = image::ActiveModel::from(image_info);
         let connection = self.get_connection();
-        
-        active_model.insert(&*connection)
+
+        active_model
+            .insert(&*connection)
             .await
             .map_err(|e| AppError::Internal(format!("插入图片记录失败: {}", e)))?;
 
@@ -157,7 +165,7 @@ impl ImageRepositoryTrait for ImageRepository {
 
     async fn find_by_hash(&self, hash: &str) -> Result<Option<ImageInfo>, AppError> {
         debug!("根据hash查询图片: {}", hash);
-        
+
         let connection = self.get_connection();
         let result = Image::find()
             .filter(image::Column::Hash.eq(hash))
@@ -170,11 +178,11 @@ impl ImageRepositoryTrait for ImageRepository {
 
     async fn find_by_query(&self, query: &ImageQuery) -> Result<PageResult<ImageInfo>, AppError> {
         debug!("分页查询图片列表: {:?}", query);
-        
+
         let connection = self.get_connection();
         let mut select = Image::find();
         let condition = self.build_query_condition(query);
-        
+
         select = select.filter(condition.clone());
         select = self.apply_ordering(select, query);
 
@@ -183,11 +191,13 @@ impl ImageRepositoryTrait for ImageRepository {
         let offset = query.offset.unwrap_or(0);
 
         let paginator = select.paginate(&*connection, limit);
-        let total = paginator.num_items()
+        let total = paginator
+            .num_items()
             .await
             .map_err(|e| AppError::Internal(format!("查询图片总数失败: {}", e)))?;
 
-        let models = paginator.fetch_page(offset / limit)
+        let models = paginator
+            .fetch_page(offset / limit)
             .await
             .map_err(|e| AppError::Internal(format!("查询图片列表失败: {}", e)))?;
 
@@ -202,7 +212,7 @@ impl ImageRepositoryTrait for ImageRepository {
 
     async fn update_access(&self, hash: &str) -> Result<bool, AppError> {
         debug!("更新图片访问信息: {}", hash);
-        
+
         let connection = self.get_connection();
         let image_model = Image::find()
             .filter(image::Column::Hash.eq(hash))
@@ -214,11 +224,12 @@ impl ImageRepositoryTrait for ImageRepository {
             let mut active_model: image::ActiveModel = model.into();
             active_model.access_count = sea_orm::Set(active_model.access_count.unwrap() + 1);
             active_model.last_accessed = sea_orm::Set(Some(Utc::now()));
-            
-            active_model.update(&*connection)
+
+            active_model
+                .update(&*connection)
                 .await
                 .map_err(|e| AppError::Internal(format!("更新访问信息失败: {}", e)))?;
-            
+
             debug!("图片访问信息更新成功: {}", hash);
             Ok(true)
         } else {
@@ -228,7 +239,7 @@ impl ImageRepositoryTrait for ImageRepository {
 
     async fn delete_by_hash(&self, hash: &str) -> Result<bool, AppError> {
         debug!("删除图片记录: {}", hash);
-        
+
         let connection = self.get_connection();
         let result = Image::delete_many()
             .filter(image::Column::Hash.eq(hash))
@@ -240,13 +251,13 @@ impl ImageRepositoryTrait for ImageRepository {
         if deleted {
             info!("图片记录删除成功: {}", hash);
         }
-        
+
         Ok(deleted)
     }
 
     async fn get_stats(&self) -> Result<ImageStats, AppError> {
         debug!("获取图片统计信息");
-        
+
         let connection = self.get_connection();
         let db_backend = connection.get_database_backend();
 
@@ -263,7 +274,7 @@ impl ImageRepositoryTrait for ImageRepository {
             (
                 row.try_get("", "total_count").unwrap_or(0i64),
                 row.try_get("", "total_size").unwrap_or(0i64),
-                row.try_get("", "average_size").unwrap_or(0.0f64)
+                row.try_get("", "average_size").unwrap_or(0.0f64),
             )
         } else {
             (0i64, 0i64, 0.0f64)
@@ -313,4 +324,4 @@ impl ImageRepositoryTrait for ImageRepository {
             by_time,
         })
     }
-} 
+}

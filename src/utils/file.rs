@@ -7,11 +7,14 @@ use crate::utils::error::AppError;
 /// 专注于web友好和广泛支持的格式
 pub const SUPPORTED_IMAGE_TYPES: &[&str] = &[
     // 传统格式
-    "image/jpeg", "image/png", "image/gif",
-    // 现代格式  
-    "image/webp", "image/avif",
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    // 现代格式
+    "image/webp",
+    "image/avif",
     // 图标格式
-    "image/x-icon"
+    "image/x-icon",
 ];
 
 /// 基于文件内容检测真实的MIME
@@ -41,20 +44,16 @@ pub fn detect_file_type(data: &[u8]) -> Result<String, AppError> {
                 image::ImageFormat::Avif => "image/avif",
                 _ => return Err(AppError::UnsupportedFileType),
             };
-            
+
             if SUPPORTED_IMAGE_TYPES.contains(&mime_type) {
                 Ok(mime_type.to_string())
             } else {
                 Err(AppError::UnsupportedFileType)
             }
         }
-        Err(_) => {
-                Err(AppError::UnsupportedFileType)
-            }
+        Err(_) => Err(AppError::UnsupportedFileType),
     }
 }
-
-
 
 /// 根据MIME类型获取对应的文件扩展名
 pub fn get_extension_from_mime(mime_type: &str) -> Result<String, AppError> {
@@ -62,24 +61,24 @@ pub fn get_extension_from_mime(mime_type: &str) -> Result<String, AppError> {
         // JPEG 格式
         "image/jpeg" => Ok("jpg".to_string()),
         "image/jpg" => Ok("jpg".to_string()),
-        
+
         // PNG 格式
         "image/png" => Ok("png".to_string()),
-        
+
         // GIF 格式
         "image/gif" => Ok("gif".to_string()),
-        
+
         // WebP 格式
         "image/webp" => Ok("webp".to_string()),
-        
+
         // AVIF 格式 (现代高效格式)
         "image/avif" => Ok("avif".to_string()),
-        
+
         // ICO 格式 (图标)
         "image/x-icon" => Ok("ico".to_string()),
         "image/vnd.microsoft.icon" => Ok("ico".to_string()),
         "image/ico" => Ok("ico".to_string()),
-        
+
         _ => Err(AppError::UnsupportedFileType),
     }
 }
@@ -87,9 +86,9 @@ pub fn get_extension_from_mime(mime_type: &str) -> Result<String, AppError> {
 /// 验证文件大小
 pub fn validate_file_size(size: u64) -> Result<(), AppError> {
     let config = AppConfig::get();
-    if size > config.storage.max_file_size {
+    if size > config.storage.max_file_size.as_bytes() {
         Err(AppError::FileTooLarge {
-            max_size: config.storage.max_file_size,
+            max_size: config.storage.max_file_size.as_bytes(),
         })
     } else {
         Ok(())

@@ -1,7 +1,7 @@
-use std::sync::Arc;
-use std::time::Duration;
 use sea_orm::{Database, DatabaseConnection};
-use tracing::{info, error, warn};
+use std::sync::Arc;
+use std::time::Duration as StdDuration;
+use tracing::{error, info};
 
 use crate::config::AppConfig;
 use crate::utils::AppError;
@@ -11,9 +11,9 @@ use crate::utils::AppError;
 pub struct PoolConfig {
     pub max_connections: u32,
     pub min_connections: u32,
-    pub connect_timeout: Duration,
-    pub idle_timeout: Duration,
-    pub max_lifetime: Duration,
+    pub connect_timeout: StdDuration,
+    pub idle_timeout: StdDuration,
+    pub max_lifetime: StdDuration,
 }
 
 impl Default for PoolConfig {
@@ -21,9 +21,9 @@ impl Default for PoolConfig {
         Self {
             max_connections: 32,
             min_connections: 4,
-            connect_timeout: Duration::from_secs(30),
-            idle_timeout: Duration::from_secs(300),
-            max_lifetime: Duration::from_secs(1800),
+            connect_timeout: StdDuration::from_secs(30),
+            idle_timeout: StdDuration::from_secs(300),
+            max_lifetime: StdDuration::from_secs(1800),
         }
     }
 }
@@ -38,15 +38,29 @@ pub struct DatabasePool {
 impl DatabasePool {
     /// 创建新的数据库连接池
     pub async fn new() -> Result<Self, AppError> {
-        Self::with_config(PoolConfig::default()).await
+        let config = AppConfig::get();
+
+        // 从配置文件中构建 PoolConfig
+        let pool_config = PoolConfig {
+            max_connections: config.database.max_connections,
+            min_connections: config.database.min_connections,
+            connect_timeout: StdDuration::from_secs(config.database.connect_timeout.as_seconds()),
+            idle_timeout: StdDuration::from_secs(config.database.idle_timeout.as_seconds()),
+            max_lifetime: StdDuration::from_secs(config.database.max_lifetime.as_seconds()),
+        };
+
+        Self::with_config(pool_config).await
     }
 
     /// 使用自定义配置创建数据库连接池
     pub async fn with_config(pool_config: PoolConfig) -> Result<Self, AppError> {
         let config = AppConfig::get();
-        
-        info!("初始化数据库连接池，类型: {}", config.database.database_type);
-        
+
+        info!(
+            "初始化数据库连接池，类型: {}",
+            config.database.database_type
+        );
+
         // 构建连接选项
         let mut conn_options = sea_orm::ConnectOptions::new(&config.database.connection_string);
         conn_options
@@ -61,42 +75,47 @@ impl DatabasePool {
         // 根据数据库类型进行特殊处理
         match config.database.database_type.as_str() {
             "sqlite" => {
-                let db_path = config.database.connection_string
+                let db_path = config
+                    .database
+                    .connection_string
                     .strip_prefix("sqlite:")
                     .unwrap_or(&config.database.connection_string);
-                
+
                 // 确保数据目录存在
                 if let Some(parent) = std::path::Path::new(db_path).parent() {
-                    tokio::fs::create_dir_all(parent).await
+                    tokio::fs::create_dir_all(parent)
+                        .await
                         .map_err(|e| AppError::Internal(format!("创建数据目录失败: {}", e)))?;
                 }
 
                 // 如果数据库文件不存在，先创建一个空文件
                 if !std::path::Path::new(db_path).exists() {
-                    tokio::fs::File::create(db_path).await
+                    tokio::fs::File::create(db_path)
+                        .await
                         .map_err(|e| AppError::Internal(format!("创建数据库文件失败: {}", e)))?;
                 }
-            },
+            }
             "postgres" | "postgresql" => {
                 // PostgreSQL 特定配置
                 conn_options.sqlx_logging(true);
-            },
+            }
             "mysql" => {
                 // MySQL 特定配置
                 conn_options.sqlx_logging(true);
-            },
+            }
             _ => {
-                return Err(AppError::Internal(format!("不支持的数据库类型: {}", config.database.database_type)));
+                return Err(AppError::Internal(format!(
+                    "不支持的数据库类型: {}",
+                    config.database.database_type
+                )));
             }
         }
 
         // 创建连接
-        let connection = Database::connect(conn_options)
-            .await
-            .map_err(|e| {
-                error!("数据库连接失败: {}", e);
-                AppError::Internal(format!("数据库连接失败: {}", e))
-            })?;
+        let connection = Database::connect(conn_options).await.map_err(|e| {
+            error!("数据库连接失败: {}", e);
+            AppError::Internal(format!("数据库连接失败: {}", e))
+        })?;
 
         info!("数据库连接池初始化成功");
 
@@ -117,7 +136,7 @@ impl DatabasePool {
             .ping()
             .await
             .map_err(|e| AppError::Internal(format!("数据库连接健康检查失败: {}", e)))?;
-        
+
         Ok(())
     }
 
@@ -131,22 +150,6 @@ impl DatabasePool {
             active_connections: 0, // 无法直接获取
             idle_connections: 0,   // 无法直接获取
         }
-    }
-
-    /// 关闭数据库连接池
-    pub async fn close(&self) -> Result<(), AppError> {
-        info!("关闭数据库连接池...");
-        
-        // 执行最后的健康检查以确保连接正常
-        if let Err(e) = self.health_check().await {
-            warn!("关闭前健康检查失败: {}", e);
-        }
-
-        // Sea-ORM/SQLx 会在Drop时自动关闭连接
-        // 这里我们可以做一些清理工作
-        info!("数据库连接池已准备关闭，连接将在Drop时自动清理");
-        
-        Ok(())
     }
 }
 
@@ -167,4 +170,4 @@ impl PoolStats {
             self.active_connections as f32 / self.max_connections as f32
         }
     }
-} 
+}

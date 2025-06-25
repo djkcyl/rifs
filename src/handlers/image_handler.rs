@@ -6,11 +6,11 @@ use axum::{
 };
 use tracing::{error, info, warn};
 
-use crate::models::{UploadResponse, ImageQuery, ImageTransformParams};
-use crate::services::{ImageService, ImageTransformService, CacheService};
 use crate::app_state::AppState;
-use crate::utils::AppError;
 use crate::config::AppConfig;
+use crate::models::{ImageQuery, ImageTransformParams, UploadResponse};
+use crate::services::{CacheService, ImageService, ImageTransformService};
+use crate::utils::AppError;
 
 /// 图片上传接口
 pub async fn upload_image(
@@ -24,7 +24,7 @@ pub async fn upload_image(
         AppError::BadRequest("无效的multipart数据".to_string())
     })? {
         let name = field.name().unwrap_or("").to_string();
-        
+
         // 只处理名为 "file" 的字段
         if name == "file" {
             // 读取文件数据
@@ -68,15 +68,15 @@ pub async fn get_image(
     let (hash, transform_params) = if let Some(at_pos) = identifier.find('@') {
         let hash = &identifier[..at_pos];
         let params_str = &identifier[at_pos + 1..];
-        
+
         info!("解析转换参数: {}", params_str);
-        
+
         let params = ImageTransformParams::parse(params_str)
             .map_err(|e| AppError::BadRequest(format!("转换参数解析失败: {}", e)))?;
-        
+
         // 验证参数合理性
         ImageTransformService::validate_params(&params)?;
-        
+
         (hash, Some(params))
     } else {
         (identifier.as_str(), None)
@@ -84,9 +84,10 @@ pub async fn get_image(
 
     // 读取原始图片文件
     let image_data = ImageService::read_image_file(app_state.db_pool(), hash).await?;
-    
+
     // 获取图片信息
-    let image_info = ImageService::get_image_info(app_state.db_pool(), hash).await?
+    let image_info = ImageService::get_image_info(app_state.db_pool(), hash)
+        .await?
         .ok_or(AppError::FileNotFound)?;
 
     let config = AppConfig::get();
@@ -94,43 +95,63 @@ pub async fn get_image(
     // 根据是否需要转换决定处理方式
     let (final_data, final_mime) = if let Some(ref params) = transform_params {
         let config = AppConfig::get();
-        
+
         // 检查是否启用缓存
         if config.cache.enable_transform_cache {
             let transform_params_str = identifier.split('@').nth(1).unwrap_or("").to_string();
             let cache_key = CacheService::generate_cache_key(hash, &transform_params_str);
-            
+
             // 尝试从缓存获取
             let connection = app_state.db_pool().get_connection();
             let cache_service = CacheService::new(connection.clone())?;
             cache_service.ensure_cache_dir().await?;
-            
+
             if let Ok(Some(cached)) = cache_service.get_cache(&cache_key).await {
                 info!("缓存命中: {}", cache_key);
                 let cached_data = cache_service.read_cache(&cached).await?;
                 (cached_data, cached.mime_type)
             } else {
                 // 缓存未命中，进行转换
-                info!("缓存未命中，开始图片转换: {} -> {:?}", image_info.mime_type, params);
-                let (transformed_data, transformed_mime) = ImageTransformService::transform_image(&image_data, &image_info.mime_type, params).await?;
-                
+                info!(
+                    "缓存未命中，开始图片转换: {} -> {:?}",
+                    image_info.mime_type, params
+                );
+                let (transformed_data, transformed_mime) = ImageTransformService::transform_image(
+                    &image_data,
+                    &image_info.mime_type,
+                    params,
+                )
+                .await?;
+
                 // 保存到缓存
-                if let Err(e) = cache_service.save_cache(hash, &transform_params_str, &transformed_data, &transformed_mime).await {
+                if let Err(e) = cache_service
+                    .save_cache(
+                        hash,
+                        &transform_params_str,
+                        &transformed_data,
+                        &transformed_mime,
+                    )
+                    .await
+                {
                     warn!("保存缓存失败: {}", e);
                 }
-                
+
                 (transformed_data, transformed_mime)
             }
         } else {
             // 缓存未启用，直接转换
-            info!("开始图片转换（缓存未启用）: {} -> {:?}", image_info.mime_type, params);
-            ImageTransformService::transform_image(&image_data, &image_info.mime_type, params).await?
+            info!(
+                "开始图片转换（缓存未启用）: {} -> {:?}",
+                image_info.mime_type, params
+            );
+            ImageTransformService::transform_image(&image_data, &image_info.mime_type, params)
+                .await?
         }
     } else {
         // 不需要转换，返回原始数据
         (image_data, image_info.mime_type.clone())
     };
-    
+
     // 生成文件名（如果进行了转换，使用新的扩展名）
     let filename = if let Some(ref params) = transform_params {
         if let Some(format) = &params.format {
@@ -157,28 +178,51 @@ pub async fn get_image(
     // 构建扩展的响应头，包含图片信息
     use axum::http::HeaderMap;
     let mut headers = HeaderMap::new();
-    
+
     // 基础响应头
     headers.insert(header::CONTENT_TYPE, final_mime.parse().unwrap());
-    headers.insert(header::CONTENT_DISPOSITION, content_disposition.parse().unwrap());
+    headers.insert(
+        header::CONTENT_DISPOSITION,
+        content_disposition.parse().unwrap(),
+    );
     headers.insert(header::CACHE_CONTROL, cache_control.parse().unwrap());
-    
+
     // 原始图片信息
     headers.insert("x-original-hash", image_info.hash.parse().unwrap());
-    headers.insert("x-original-size", image_info.size.to_string().parse().unwrap());
+    headers.insert(
+        "x-original-size",
+        image_info.size.to_string().parse().unwrap(),
+    );
     headers.insert("x-original-mime", image_info.mime_type.parse().unwrap());
-    headers.insert("x-original-extension", image_info.extension.parse().unwrap());
-    headers.insert("x-upload-time", image_info.created_at.format("%Y-%m-%d %H:%M:%S UTC").to_string().parse().unwrap());
-    headers.insert("x-access-count", image_info.access_count.to_string().parse().unwrap());
-    
+    headers.insert(
+        "x-original-extension",
+        image_info.extension.parse().unwrap(),
+    );
+    headers.insert(
+        "x-upload-time",
+        image_info
+            .created_at
+            .format("%Y-%m-%d %H:%M:%S UTC")
+            .to_string()
+            .parse()
+            .unwrap(),
+    );
+    headers.insert(
+        "x-access-count",
+        image_info.access_count.to_string().parse().unwrap(),
+    );
+
     // 处理后的信息
     headers.insert("x-final-mime", final_mime.parse().unwrap());
-    headers.insert("x-final-size", final_data.len().to_string().parse().unwrap());
+    headers.insert(
+        "x-final-size",
+        final_data.len().to_string().parse().unwrap(),
+    );
 
     // 如果有转换参数，添加转换信息
     if let Some(ref params) = transform_params {
         headers.insert("x-transform-applied", "true".parse().unwrap());
-        
+
         if let Some(width) = params.width {
             headers.insert("x-transform-width", width.to_string().parse().unwrap());
         }
@@ -198,16 +242,18 @@ pub async fn get_image(
                 let bg_str = match bg_color {
                     crate::models::BackgroundColor::White => "white".to_string(),
                     crate::models::BackgroundColor::Black => "black".to_string(),
-                    crate::models::BackgroundColor::Custom(r, g, b) => format!("#{:02x}{:02x}{:02x}", r, g, b),
+                    crate::models::BackgroundColor::Custom(r, g, b) => {
+                        format!("#{:02x}{:02x}{:02x}", r, g, b)
+                    }
                 };
                 headers.insert("x-transform-background", bg_str.parse().unwrap());
             }
         }
-        
+
         // 生成转换参数的完整字符串
         let params_summary = identifier.split('@').nth(1).unwrap_or("").to_string();
         headers.insert("x-transform-params", params_summary.parse().unwrap());
-        
+
         // 检查是否从GIF提取了第一帧
         if image_info.mime_type == "image/gif" && params.format.is_some() {
             headers.insert("x-gif-first-frame", "true".parse().unwrap());
@@ -218,13 +264,16 @@ pub async fn get_image(
 
     // 添加服务信息
     headers.insert("x-served-by", "RIFS".parse().unwrap());
-    headers.insert("x-response-time", std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis()
-        .to_string()
-        .parse()
-        .unwrap());
+    headers.insert(
+        "x-response-time",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+            .to_string()
+            .parse()
+            .unwrap(),
+    );
 
     Ok((headers, final_data))
 }
@@ -234,7 +283,8 @@ pub async fn get_image_info(
     State(app_state): State<AppState>,
     Path(identifier): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let image_info = ImageService::get_image_info(app_state.db_pool(), &identifier).await?
+    let image_info = ImageService::get_image_info(app_state.db_pool(), &identifier)
+        .await?
         .ok_or(AppError::FileNotFound)?;
 
     Ok(Json(serde_json::json!({
@@ -316,12 +366,12 @@ pub async fn delete_image(
 
     let config = AppConfig::get();
     let mut cache_count = 0;
-    
+
     // 如果启用了缓存，同时删除相关缓存
     if config.cache.enable_transform_cache {
         let connection = app_state.db_pool().get_connection();
         let cache_service = CacheService::new(connection)?;
-        
+
         match cache_service.remove_by_original_hash(&identifier).await {
             Ok(count) => {
                 cache_count = count;
@@ -342,4 +392,4 @@ pub async fn delete_image(
         "message": "图片删除成功",
         "cache_cleaned": cache_count
     })))
-} 
+}

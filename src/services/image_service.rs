@@ -1,15 +1,14 @@
 use chrono::Utc;
+use sha2::{Digest, Sha256};
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
-use sha2::{Sha256, Digest};
 
+use crate::database::DatabasePool;
 use crate::models::{ImageInfo, ImageQuery, ImageStats};
 use crate::repositories::{ImageRepository, ImageRepositoryTrait};
-use crate::database::DatabasePool;
 use crate::utils::{
-    AppError, ensure_upload_dir, ensure_image_dir,
-    get_file_path, validate_file_size, detect_file_type, get_extension_from_mime,
-    get_upload_dir
+    detect_file_type, ensure_image_dir, ensure_upload_dir, get_extension_from_mime, get_file_path,
+    get_upload_dir, validate_file_size, AppError,
 };
 
 /// 图片服务结构体
@@ -29,16 +28,16 @@ impl ImageService {
         if data.is_empty() {
             return Err(AppError::InvalidFile);
         }
-        
+
         // 验证文件大小
         validate_file_size(data.len() as u64)?;
 
         // 基于文件内容检测真实的MIME类型（安全）
         let mime_type = detect_file_type(data)?;
-        
+
         // 计算文件哈希值用于去重
         let file_hash = Self::calculate_file_hash(data);
-        
+
         // 检查是否已存在相同文件
         let connection = pool.get_connection();
         let image_repo = ImageRepository::new(connection.clone());
@@ -85,7 +84,10 @@ impl ImageService {
     }
 
     /// 根据哈希值获取图片信息
-    pub async fn get_image_info(pool: &DatabasePool, identifier: &str) -> Result<Option<ImageInfo>, AppError> {
+    pub async fn get_image_info(
+        pool: &DatabasePool,
+        identifier: &str,
+    ) -> Result<Option<ImageInfo>, AppError> {
         // 验证标识符格式
         if identifier.is_empty() {
             return Err(AppError::BadRequest("标识符不能为空".to_string()));
@@ -99,7 +101,10 @@ impl ImageService {
     }
 
     /// 读取图片文件内容
-    pub async fn read_image_file(pool: &DatabasePool, identifier: &str) -> Result<Vec<u8>, AppError> {
+    pub async fn read_image_file(
+        pool: &DatabasePool,
+        identifier: &str,
+    ) -> Result<Vec<u8>, AppError> {
         // 获取图片信息
         let image_info = Self::get_image_info(pool, identifier)
             .await?
@@ -152,7 +157,10 @@ impl ImageService {
     }
 
     /// 查询图片列表
-    pub async fn query_images(pool: &DatabasePool, query: &ImageQuery) -> Result<(Vec<ImageInfo>, u64), AppError> {
+    pub async fn query_images(
+        pool: &DatabasePool,
+        query: &ImageQuery,
+    ) -> Result<(Vec<ImageInfo>, u64), AppError> {
         let connection = pool.get_connection();
         let image_repo = ImageRepository::new(connection);
         let page_result = image_repo.find_by_query(query).await?;
@@ -166,5 +174,3 @@ impl ImageService {
         image_repo.get_stats().await
     }
 }
-
-

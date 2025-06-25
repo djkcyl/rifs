@@ -1,16 +1,15 @@
-pub mod image_handler;
 pub mod cache_handler;
-pub mod static_files;
 pub mod health_handler;
+pub mod image_handler;
+pub mod static_files;
 
-pub use image_handler::{
-    upload_image, get_image, get_image_info,
-    query_images_post, query_images_get, get_stats, delete_image,
-};
 pub use cache_handler::{
-    get_cache_stats, auto_cleanup_cache, cleanup_cache_with_policy,
-    clear_all_cache, cache_management_dashboard, smart_cleanup, decay_heat_scores,
-    smart_space_cleanup,
+    auto_cleanup_cache, cache_management_dashboard, cleanup_cache_with_policy, clear_all_cache,
+    decay_heat_scores, get_cache_stats, smart_cleanup, smart_space_cleanup,
+};
+pub use health_handler::{get_system_stats, health_check_detailed};
+pub use image_handler::{
+    delete_image, get_image, get_image_info, get_stats, query_images_get, query_images_post,
+    upload_image,
 };
 pub use static_files::api_docs;
-pub use health_handler::{health_check_detailed, get_system_stats}; 

@@ -1,6 +1,6 @@
+use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
 use sea_orm::Set;
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 /// 缓存实体模型
@@ -10,32 +10,32 @@ pub struct Model {
     /// 缓存键（主键）- 基于原图hash和转换参数生成
     #[sea_orm(primary_key, auto_increment = false)]
     pub cache_key: String,
-    
+
     /// 原图hash
     pub original_hash: String,
-    
+
     /// 转换参数字符串
     pub transform_params: String,
-    
+
     /// 缓存文件路径
     pub file_path: String,
-    
+
     /// 缓存文件大小（字节）
     pub file_size: i64,
-    
+
     /// 缓存结果的MIME类型
     pub mime_type: String,
-    
+
     /// 创建时间
     pub created_at: DateTime<Utc>,
-    
+
     /// 最后访问时间
     pub last_accessed: DateTime<Utc>,
-    
+
     /// 访问次数
     #[sea_orm(default_value = 0)]
     pub access_count: i64,
-    
+
     /// 缓存热度评分（基于访问频率和时间的综合评分）
     #[sea_orm(default_value = 0.0)]
     pub heat_score: f64,
@@ -78,4 +78,4 @@ impl From<&crate::models::CacheInfo> for ActiveModel {
             heat_score: Set(info.heat_score),
         }
     }
-} 
+}

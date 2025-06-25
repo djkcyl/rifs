@@ -1,6 +1,6 @@
+use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
 use sea_orm::Set;
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
@@ -9,22 +9,22 @@ pub struct Model {
     /// 文件哈希值（主键）
     #[sea_orm(primary_key, auto_increment = false)]
     pub hash: String,
-    
+
     /// 文件大小（字节）
     pub size: i64,
-    
+
     /// MIME 类型
     pub mime_type: String,
-    
+
     /// 创建时间
     pub created_at: DateTime<Utc>,
-    
+
     /// 最后访问时间
     pub last_accessed: Option<DateTime<Utc>>,
-    
+
     /// 文件扩展名
     pub extension: String,
-    
+
     /// 访问次数
     #[sea_orm(default_value = 0)]
     pub access_count: i64,
@@ -61,4 +61,4 @@ impl From<&crate::models::ImageInfo> for ActiveModel {
             access_count: Set(info.access_count),
         }
     }
-} 
+}

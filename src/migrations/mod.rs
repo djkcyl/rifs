@@ -13,4 +13,4 @@ impl MigratorTrait for Migrator {
             Box::new(m20241201_000001_create_cache_table::Migration),
         ]
     }
-} 
+}
