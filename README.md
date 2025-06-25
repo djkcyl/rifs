@@ -5,7 +5,7 @@
 ![RIFS Logo](https://img.shields.io/badge/RIFS-Rust%20Image%20File%20Server-blue?style=for-the-badge&logo=rust)
 
 <p>
-  <img src="https://img.shields.io/badge/Rust-1.75+-orange.svg?style=flat-square" alt="Rust Version">
+  <img src="https://img.shields.io/badge/Rust-1.85+-orange.svg?style=flat-square" alt="Rust Version">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License">
   <img src="https://img.shields.io/badge/Status-Production%20Ready-green.svg?style=flat-square" alt="Status">
   <img src="https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg?style=flat-square" alt="Platform">
