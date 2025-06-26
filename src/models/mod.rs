@@ -339,34 +339,6 @@ pub struct CacheStats {
     pub last_cleanup: Option<DateTime<Utc>>,
 }
 
-/// 缓存清理策略
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CacheCleanupPolicy {
-    /// 缓存最大数量
-    pub max_entries: Option<u64>,
-    /// 缓存最大总大小（字节）
-    pub max_total_size: Option<u64>,
-    /// 缓存项最大生存时间（秒）
-    pub max_age: Option<u64>,
-    /// 最小热度评分阈值
-    pub min_heat_score: Option<f64>,
-    /// 是否启用LRU清理
-    pub enable_lru: bool,
-}
-
-impl CacheCleanupPolicy {
-    /// 从配置创建缓存清理策略
-    pub fn from_config(config: &crate::config::AppConfig) -> Self {
-        Self {
-            max_entries: Some(config.cache.max_cache_entries),
-            max_total_size: Some(config.cache.max_cache_size.as_bytes()),
-            max_age: Some(config.cache.max_cache_age.as_seconds()),
-            min_heat_score: Some(config.cache.min_heat_score),
-            enable_lru: true,
-        }
-    }
-}
-
 /// 缓存清理结果
 #[derive(Debug, Serialize)]
 pub struct CacheCleanupResult {

@@ -31,15 +31,15 @@ pub fn start_cache_cleanup_task(app_state: AppState, config: &AppConfig) -> Opti
                                 continue;
                             }
 
-                            match cache_service.smart_cleanup().await {
+                            match cache_service.auto_cleanup().await {
                                 Ok(result) => {
                                     if result.cleaned_count > 0 || !result.applied_policies.is_empty() {
-                                        info!("智能缓存清理完成: 删除{}个缓存，释放{}字节，耗时{}ms",
+                                        info!("自动缓存清理完成: 删除{}个缓存，释放{}字节，耗时{}ms",
                                             result.cleaned_count, result.freed_space, result.duration_ms);
                                     }
                                 }
                                 Err(e) => {
-                                    error!("智能缓存清理失败: {}", e);
+                                    error!("自动缓存清理失败: {}", e);
                                 }
                             }
                         }
@@ -70,9 +70,8 @@ pub fn print_api_info() {
     info!("  缓存管理: GET      /cache/management");
     info!("  缓存统计: GET      /api/cache/stats");
     info!("  缓存清理: POST     /api/cache/cleanup/auto");
-    info!("  智能清理: POST     /api/cache/cleanup/smart");
-    info!("  空间清理: POST     /api/cache/cleanup/space");
     info!("  热度衰减: POST     /api/cache/decay");
+    info!("  清空缓存: DEL      /api/cache/clear");
 }
 
 /// 运行服务器

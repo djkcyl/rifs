@@ -10,10 +10,10 @@ use tower_http::cors::{Any, CorsLayer};
 use crate::app_state::AppState;
 use crate::config::AppConfig;
 use crate::handlers::{
-    api_docs, auto_cleanup_cache, cache_management_dashboard, cleanup_cache_with_policy,
+    api_docs, auto_cleanup_cache, cache_management_dashboard, 
     clear_all_cache, decay_heat_scores, delete_image, get_cache_stats, get_image, get_image_info,
     get_stats, get_system_stats, health_check_detailed, query_images_get, query_images_post,
-    smart_cleanup, smart_space_cleanup, upload_image,
+    upload_image,
 };
 use crate::middleware::{log_requests, request_timeout};
 
@@ -42,12 +42,9 @@ pub fn create_routes(app_state: AppState, config: &AppConfig) -> Router {
         .route("/api/stats", get(get_stats))
         // 删除图片
         .route("/images/{filename}", delete(delete_image))
-        // 缓存管理接口
+        // 缓存管理接口（简化版）
         .route("/api/cache/stats", get(get_cache_stats))
         .route("/api/cache/cleanup/auto", post(auto_cleanup_cache))
-        .route("/api/cache/cleanup/policy", post(cleanup_cache_with_policy))
-        .route("/api/cache/cleanup/smart", post(smart_cleanup))
-        .route("/api/cache/cleanup/space", post(smart_space_cleanup))
         .route("/api/cache/decay", post(decay_heat_scores))
         .route("/api/cache/clear", delete(clear_all_cache))
         .route("/cache/management", get(cache_management_dashboard))

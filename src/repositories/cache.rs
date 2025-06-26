@@ -1,15 +1,15 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, QueryFilter,
-    QueryOrder, QuerySelect,
+    entity::prelude::*, ActiveModelTrait, EntityTrait,
+    QueryOrder,
 };
 use std::sync::Arc;
 use tracing::{debug, error, info};
 
 use crate::entities::{cache, Cache};
 use crate::models::{CacheInfo, CacheStats};
-use crate::repositories::{BaseRepository, Repository};
+use crate::repositories::base::{BaseRepository, Repository};
 use crate::utils::AppError;
 
 /// 缓存仓储接口
@@ -32,13 +32,6 @@ pub trait CacheRepositoryTrait: Repository {
 
     /// 获取缓存统计信息
     async fn get_stats(&self) -> Result<CacheStats, AppError>;
-
-    /// 获取待清理的缓存列表
-    async fn find_cleanup_candidates(
-        &self,
-        max_age_seconds: Option<i64>,
-        limit: Option<u64>,
-    ) -> Result<Vec<CacheInfo>, AppError>;
 
     /// 清理所有缓存
     async fn clear_all(&self) -> Result<u64, AppError>;
@@ -63,11 +56,7 @@ impl CacheRepository {
         }
     }
 
-    /// 构建老化缓存的查询条件
-    fn build_aged_condition(&self, max_age_seconds: i64) -> Condition {
-        let cutoff_time = Utc::now() - chrono::Duration::seconds(max_age_seconds);
-        Condition::all().add(cache::Column::CreatedAt.lte(cutoff_time))
-    }
+
 
     /// 计算衰减后的热度评分
     /// 基于访问频率、时间衰减和配置的衰减因子
@@ -266,44 +255,6 @@ impl CacheRepositoryTrait for CacheRepository {
             last_cleanup: None,
             top_cached: Vec::new(),
         })
-    }
-
-    async fn find_cleanup_candidates(
-        &self,
-        max_age_seconds: Option<i64>,
-        limit: Option<u64>,
-    ) -> Result<Vec<CacheInfo>, AppError> {
-        debug!(
-            "查找待清理的缓存候选项，最大年龄: {:?}秒，限制: {:?}",
-            max_age_seconds, limit
-        );
-
-        let connection = self.get_connection();
-        let mut select = Cache::find();
-
-        // 如果指定了最大年龄，添加年龄条件
-        if let Some(max_age) = max_age_seconds {
-            let condition = self.build_aged_condition(max_age);
-            select = select.filter(condition);
-        }
-
-        // 按最后访问时间升序排序（LRU）
-        select = select.order_by_asc(cache::Column::LastAccessed);
-
-        // 如果指定了限制，应用限制
-        if let Some(limit_val) = limit {
-            select = select.limit(limit_val);
-        }
-
-        let models = select
-            .all(&*connection)
-            .await
-            .map_err(|e| AppError::Internal(format!("查询待清理缓存失败: {}", e)))?;
-
-        let caches: Vec<CacheInfo> = models.into_iter().map(|model| model.into()).collect();
-        debug!("找到{}个待清理的缓存候选项", caches.len());
-
-        Ok(caches)
     }
 
     async fn clear_all(&self) -> Result<u64, AppError> {

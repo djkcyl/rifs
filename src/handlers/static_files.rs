@@ -300,6 +300,21 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
             .path {
                 width: 100%;
             }
+            
+            .header > div {
+                flex-direction: column !important;
+                gap: 15px;
+            }
+            
+            .header > div > div {
+                flex: none !important;
+                text-align: center !important;
+            }
+            
+            .nav-btn {
+                padding: 8px 16px;
+                font-size: 13px;
+            }
         }
         
         /* 格式支持样式 */
@@ -376,6 +391,30 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
         .format-notes li {
             margin-bottom: 8px;
         }
+
+        .nav-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border: 1px solid rgba(102, 126, 234, 0.3);
+        }
+
+        .nav-btn:hover {
+            background: linear-gradient(135deg, #5a67d8, #6b46c1);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+            border-color: rgba(102, 126, 234, 0.6);
+        }
         
         @media (max-width: 768px) {
             .format-category {
@@ -392,8 +431,18 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
 <body>
     <div class="container">
         <div class="header">
-            <h1>RIFS</h1>
-            <p>Rust 图床服务 - 高性能、安全、易用</p>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div style="flex: 1;"></div>
+                <div style="text-align: center; flex: 2;">
+                    <h1>RIFS</h1>
+                    <p>Rust 图床服务 - 高性能、安全、易用</p>
+                </div>
+                <div style="flex: 1; text-align: right;">
+                    <a href="/cache/management" class="nav-btn" title="缓存管理面板">
+                        🗄️ 缓存管理
+                    </a>
+                </div>
+            </div>
         </div>
 
         <div class="card">
@@ -551,17 +600,17 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
                             <span class="path">/api/cache/cleanup/auto</span>
                         </div>
                         <div class="endpoint-content">
-                            <div class="description">触发智能自动缓存清理</div>
+                            <div class="description">智能自动缓存清理 - 只在空间达到阈值时执行基于热度的清理</div>
                         </div>
                     </div>
 
                     <div class="endpoint">
                         <div class="endpoint-header">
                             <span class="method post">POST</span>
-                            <span class="path">/api/cache/cleanup/policy</span>
+                            <span class="path">/api/cache/decay</span>
                         </div>
                         <div class="endpoint-content">
-                            <div class="description">根据自定义策略清理缓存 (JSON参数)</div>
+                            <div class="description">手动触发缓存热度衰减计算</div>
                         </div>
                     </div>
 
@@ -1204,40 +1253,61 @@ pub const CACHE_MANAGEMENT_HTML: &str = r#"<!DOCTYPE html>
             color: #ef4444; 
             border: 1px solid rgba(239, 68, 68, 0.3);
         }
+        .result.info {
+            background: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
         .loading { 
             display: none; 
             text-align: center; 
             color: #94a3b8;
             font-style: italic;
         }
-        .policy-form { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
-            gap: 15px; 
-            margin: 15px 0; 
+        .badge { 
+            display: inline-block; 
+            padding: 4px 8px; 
+            border-radius: 4px; 
+            font-size: 0.75rem; 
+            font-weight: 600; 
+            text-transform: uppercase; 
+            letter-spacing: 0.5px;
         }
-        .form-group label { 
-            display: block; 
-            margin-bottom: 5px; 
-            font-weight: 500;
-            color: #f1f5f9;
+        .badge-primary { 
+            background: #3b82f6; 
+            color: white; 
         }
-        .form-group input { 
-            width: 100%; 
-            padding: 10px; 
-            border: 1px solid rgba(148, 163, 184, 0.3); 
-            border-radius: 6px;
-            background: rgba(30, 41, 59, 0.8);
-            color: #f1f5f9;
-            transition: border-color 0.3s;
+        .badge-success { 
+            background: #10b981; 
+            color: white; 
         }
-        .form-group input:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        .badge-warning { 
+            background: #f59e0b; 
+            color: white; 
         }
-        .form-group input::placeholder {
-            color: #94a3b8;
+
+        .nav-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border: 1px solid rgba(102, 126, 234, 0.3);
+        }
+
+        .nav-btn:hover {
+            background: linear-gradient(135deg, #5a67d8, #6b46c1);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+            border-color: rgba(102, 126, 234, 0.6);
         }
         
         @media (max-width: 768px) {
@@ -1245,19 +1315,43 @@ pub const CACHE_MANAGEMENT_HTML: &str = r#"<!DOCTYPE html>
             .header h1 { font-size: 2rem; }
             .action-grid { grid-template-columns: 1fr; }
             .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            
+            .header > div {
+                flex-direction: column !important;
+                gap: 15px;
+            }
+            
+            .header > div > div {
+                flex: none !important;
+                text-align: center !important;
+            }
+            
+            .nav-btn {
+                padding: 8px 16px;
+                font-size: 13px;
+            }
         }
         
         @media (max-width: 480px) {
             .stats-grid { grid-template-columns: 1fr; }
-            .policy-form { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🗄️ RIFS 缓存管理面板</h1>
-            <p>智能图片转换缓存管理系统</p>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div style="flex: 1;"></div>
+                <div style="text-align: center; flex: 2;">
+                    <h1>🗄️ RIFS 缓存管理面板</h1>
+                    <p>简化的智能图片转换缓存管理系统</p>
+                </div>
+                <div style="flex: 1; text-align: right;">
+                    <a href="/" class="nav-btn" title="返回API文档">
+                        🏠 返回主页
+                    </a>
+                </div>
+            </div>
         </div>
 
         <div class="card">
@@ -1277,101 +1371,69 @@ pub const CACHE_MANAGEMENT_HTML: &str = r#"<!DOCTYPE html>
             <h2 style="color: #f1f5f9; margin-bottom: 20px;">🧹 缓存清理操作</h2>
             <div class="action-grid">
                 <div class="action-card">
-                    <h3>🤖 智能自动清理</h3>
-                    <p>根据系统配置的策略进行智能清理，包括年龄、热度、大小等因素。安全且高效。</p>
+                    <h3>🤖 自动清理 <span class="badge badge-primary">推荐</span></h3>
+                    <p>
+                        <strong>智能空间管理：</strong> 只在空间使用率达到设定阈值（默认80%）时才开始清理。<br>
+                        首先清理完全无热度的缓存，如需要则继续清理低热度缓存。
+                    </p>
                     <button class="btn" onclick="autoCleanup()">执行自动清理</button>
                 </div>
 
                 <div class="action-card">
-                    <h3>🧠 热度衰减</h3>
-                    <p>手动触发热度评分衰减计算，根据配置的衰减因子更新所有缓存的热度评分。</p>
+                    <h3>🧠 热度衰减 <span class="badge badge-warning">维护</span></h3>
+                    <p>
+                        手动触发热度评分衰减计算，根据配置的衰减因子更新所有缓存的热度评分。
+                        定时任务会自动执行此操作。
+                    </p>
                     <button class="btn btn-warning" onclick="decayHeatScores()">执行热度衰减</button>
                 </div>
 
                 <div class="action-card">
-                    <h3>🚀 智能清理</h3>
-                    <p>执行完整的智能清理流程：先进行热度衰减，再清理低热度缓存和过期项。最全面的清理策略。</p>
-                    <button class="btn" onclick="smartCleanup()">执行智能清理</button>
-                </div>
-
-                <div class="action-card">
-                    <h3>💾 智能空间管理</h3>
-                    <p>分层清理策略：总是清理完全无热度的缓存，仅在空间不足时清理低热度缓存。智能保护有价值的内容。</p>
-                    <button class="btn btn-warning" onclick="smartSpaceCleanup()">执行空间管理</button>
-                </div>
-
-                <div class="action-card">
-                    <h3>⚙️ 自定义策略清理</h3>
-                    <p>根据您的自定义参数进行精确清理，可单独或组合使用各种策略。</p>
-                    <div class="policy-form">
-                        <div class="form-group">
-                            <label>最大缓存数量</label>
-                            <input type="number" id="maxEntries" placeholder="如：1000">
-                        </div>
-                        <div class="form-group">
-                            <label>最大总大小 (MB)</label>
-                            <input type="number" id="maxSize" placeholder="如：100">
-                        </div>
-                        <div class="form-group">
-                            <label>最大生存时间 (天)</label>
-                            <input type="number" id="maxAge" placeholder="如：30">
-                        </div>
-                        <div class="form-group">
-                            <label>最小热度评分</label>
-                            <input type="number" step="0.1" id="minHeat" placeholder="如：0.1">
-                        </div>
-                    </div>
-                    <button class="btn btn-warning" onclick="customCleanup()">执行自定义清理</button>
-                </div>
-
-                <div class="action-card">
-                    <h3>🗑️ 清空所有缓存</h3>
-                    <p style="color: #ef4444;">⚠️ 危险操作：此操作将删除所有缓存文件，不可恢复！请谨慎使用。</p>
+                    <h3>🗑️ 清空所有缓存 <span class="badge badge-danger">危险</span></h3>
+                    <p style="color: #ef4444;">
+                        ⚠️ <strong>危险操作：</strong> 此操作将删除所有缓存文件，不可恢复！请谨慎使用。
+                    </p>
                     <button class="btn btn-danger" onclick="clearAll()">清空所有缓存</button>
                 </div>
             </div>
         </div>
 
         <div class="card">
-            <h2 style="color: #f1f5f9; margin-bottom: 20px;">📚 操作说明</h2>
+            <h2 style="color: #f1f5f9; margin-bottom: 20px;">📚 简化清理策略说明</h2>
             <div style="color: #cbd5e1; line-height: 1.6;">
-                <h4 style="color: #06b6d4; margin-bottom: 10px;">🎯 清理策略说明</h4>
-                <ul style="margin-left: 20px;">
-                    <li><strong>年龄清理:</strong> 删除超过指定天数的缓存</li>
-                    <li><strong>大小限制:</strong> 当总大小超出限制时删除最冷缓存</li>
-                    <li><strong>数量限制:</strong> 当缓存数量超出限制时使用LRU策略</li>
-                    <li><strong>热度清理:</strong> 删除热度评分低于阈值的缓存</li>
-                </ul>
+                <h4 style="color: #06b6d4; margin-bottom: 10px;">🎯 新的清理逻辑</h4>
+                <p style="margin-left: 20px; margin-bottom: 20px;">
+                    <strong>基于空间阈值的清理：</strong> 只有当空间使用率达到设定阈值（默认80%）时才开始清理，
+                    避免频繁的无效清理操作。
+                </p>
                 
+                <h4 style="color: #06b6d4; margin: 20px 0 10px 0;">🔥 基于热度的清理策略</h4>
+                <ul style="margin-left: 20px;">
+                    <li><strong>第一层清理：</strong> 优先清理完全无热度（heat_score ≤ 0.001）的缓存</li>
+                    <li><strong>第二层清理：</strong> 如果空间仍不足，清理低热度的缓存直到达到目标使用率</li>
+                    <li><strong>最大生存时间：</strong> 只对完全无热度的缓存生效，有价值的缓存不会因为时间而被删除</li>
+                </ul>
+
                 <h4 style="color: #06b6d4; margin: 20px 0 10px 0;">🔄 缓存热度评分</h4>
                 <p style="margin-left: 20px;">
-                    系统根据访问频率和时间衰减自动计算热度评分，热门缓存会被优先保留。
-                    评分越高表示缓存越重要，越不容易被清理。
+                    系统根据访问频率和时间衰减自动计算热度评分。热门缓存会被优先保留，
+                    完全无热度的缓存会被及时清理，低热度的缓存仅在空间不足时清理。
                 </p>
 
                 <h4 style="color: #06b6d4; margin: 20px 0 10px 0;">📉 热度衰减机制</h4>
                 <ul style="margin-left: 20px;">
-                    <li><strong>基础评分:</strong> 访问次数 ÷ 缓存年龄（小时）</li>
-                    <li><strong>时间衰减:</strong> 基础评分 × 衰减因子^(距上次访问小时数)</li>
-                    <li><strong>衰减因子:</strong> 配置值（0.0-1.0），越小衰减越快</li>
-                    <li><strong>自动触发:</strong> 定时任务自动执行衰减和清理</li>
+                    <li><strong>基础评分：</strong> 访问次数 ÷ 缓存年龄（小时）</li>
+                    <li><strong>时间衰减：</strong> 基础评分 × 衰减因子^(距上次访问小时数)</li>
+                    <li><strong>衰减因子：</strong> 配置值（0.0-1.0），默认0.9</li>
+                    <li><strong>最小热度阈值：</strong> 配置值，默认0.1</li>
                 </ul>
 
-                <h4 style="color: #06b6d4; margin: 20px 0 10px 0;">💾 智能空间管理</h4>
+                <h4 style="color: #06b6d4; margin: 20px 0 10px 0;">✨ 简化的优势</h4>
                 <ul style="margin-left: 20px;">
-                    <li><strong>分层清理:</strong> 零热度缓存总是清理，低热度缓存按需清理</li>
-                    <li><strong>零热度清理:</strong> 完全无热度（≤0.001）的缓存随时清理，不占用宝贵空间</li>
-                    <li><strong>阈值触发:</strong> 低热度缓存仅在使用率超过设定阈值（默认80%）时清理</li>
-                    <li><strong>保护机制:</strong> 智能保护有价值的缓存内容不被误删</li>
-                    <li><strong>目标控制:</strong> 清理到阈值的90%，避免频繁触发</li>
-                </ul>
-
-                <h4 style="color: #06b6d4; margin: 20px 0 10px 0;">🚀 智能清理优势</h4>
-                <ul style="margin-left: 20px;">
-                    <li><strong>动态评分:</strong> 实时更新热度，确保评分准确性</li>
-                    <li><strong>渐进清理:</strong> 优先清理最冷的缓存，保护热门内容</li>
-                    <li><strong>多重策略:</strong> 结合年龄、大小、热度等多种清理策略</li>
-                    <li><strong>自适应:</strong> 根据系统负载自动调整清理频率</li>
+                    <li><strong>高效清理：</strong> 只在必要时才执行清理，减少系统负担</li>
+                    <li><strong>智能保护：</strong> 有价值的缓存不会被意外删除</li>
+                    <li><strong>简单配置：</strong> 通过空间阈值和热度设置即可控制清理策略</li>
+                    <li><strong>自动化：</strong> 定时任务自动执行清理和热度衰减</li>
                 </ul>
             </div>
         </div>
@@ -1435,18 +1497,24 @@ pub const CACHE_MANAGEMENT_HTML: &str = r#"<!DOCTYPE html>
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
 
-        // 自动清理
+        // 自动清理（主要清理接口）
         async function autoCleanup() {
-            if (!confirm('确定要执行自动清理吗？\n\n系统将根据配置的策略智能清理过期和低热度的缓存。')) return;
+            if (!confirm('确定要执行自动清理吗？\\n\\n系统将检查空间使用率：\\n• 如果未达到阈值，跳过清理\\n• 如果达到阈值，执行基于热度的清理')) return;
             
             try {
-                showResult('正在执行自动清理...', 'success');
+                showResult('正在检查空间使用率并执行清理...', 'info');
                 const response = await fetch('/api/cache/cleanup/auto', { method: 'POST' });
                 const result = await response.json();
                 
                 if (result.success && result.data) {
-                    const message = `自动清理完成！\n删除 ${result.data.cleaned_count} 个缓存\n释放 ${formatSize(result.data.freed_space)}\n耗时 ${result.data.duration_ms}ms`;
-                    showResult(message, 'success');
+                    if (result.data.cleaned_count > 0) {
+                        const policies = result.data.applied_policies.join('\\n• ');
+                        const message = `自动清理完成！\\n删除 ${result.data.cleaned_count} 个缓存\\n释放 ${formatSize(result.data.freed_space)}\\n耗时 ${result.data.duration_ms}ms\\n\\n应用的策略:\\n• ${policies}`;
+                        showResult(message, 'success');
+                    } else {
+                        const policies = result.data.applied_policies.join('\\n• ');
+                        showResult(`无需清理\\n\\n${policies}`, 'info');
+                    }
                     setTimeout(loadStats, 1000); // 延迟刷新统计
                 } else {
                     showResult('自动清理失败: ' + (result.message || '未知错误'), 'error');
@@ -1458,15 +1526,15 @@ pub const CACHE_MANAGEMENT_HTML: &str = r#"<!DOCTYPE html>
 
         // 热度衰减
         async function decayHeatScores() {
-            if (!confirm('确定要执行热度衰减吗？\n\n系统将根据配置的衰减因子重新计算所有缓存的热度评分。')) return;
+            if (!confirm('确定要执行热度衰减吗？\\n\\n系统将根据配置的衰减因子重新计算所有缓存的热度评分。')) return;
             
             try {
-                showResult('正在执行热度衰减...', 'success');
+                showResult('正在执行热度衰减...', 'info');
                 const response = await fetch('/api/cache/decay', { method: 'POST' });
                 const result = await response.json();
                 
                 if (result.success) {
-                    const message = `热度衰减完成！\n更新了 ${result.data || 0} 个缓存项的热度评分`;
+                    const message = `热度衰减完成！\\n更新了 ${result.data || 0} 个缓存项的热度评分`;
                     showResult(message, 'success');
                     setTimeout(loadStats, 1000); // 延迟刷新统计
                 } else {
@@ -1477,112 +1545,18 @@ pub const CACHE_MANAGEMENT_HTML: &str = r#"<!DOCTYPE html>
             }
         }
 
-        // 智能清理
-        async function smartCleanup() {
-            if (!confirm('确定要执行智能清理吗？\n\n系统将先进行热度衰减，然后清理低热度缓存和过期项。这是最全面的清理策略。')) return;
-            
-            try {
-                showResult('正在执行智能清理...', 'success');
-                const response = await fetch('/api/cache/cleanup/smart', { method: 'POST' });
-                const result = await response.json();
-                
-                if (result.success && result.data) {
-                    const policies = result.data.applied_policies.join('\\n• ');
-                    const message = `智能清理完成！\n删除 ${result.data.cleaned_count} 个缓存\n释放 ${formatSize(result.data.freed_space)}\n耗时 ${result.data.duration_ms}ms\n\n应用的策略:\n• ${policies}`;
-                    showResult(message, 'success');
-                    setTimeout(loadStats, 1000); // 延迟刷新统计
-                } else {
-                    showResult('智能清理失败: ' + (result.message || '未知错误'), 'error');
-                }
-            } catch (error) {
-                showResult('网络错误: ' + error.message, 'error');
-            }
-        }
-
-        // 智能空间管理清理
-        async function smartSpaceCleanup() {
-            if (!confirm('确定要执行智能空间管理吗？\n\n系统将：\n1. 总是清理完全无热度的缓存（≤0.001）\n2. 仅在空间不足时清理低热度缓存')) return;
-            
-            try {
-                showResult('正在检查空间使用情况...', 'info');
-                const response = await fetch('/api/cache/cleanup/space', { method: 'POST' });
-                const result = await response.json();
-                
-                                 if (result.success && result.data) {
-                     if (result.data.cleaned_count > 0) {
-                         const policies = result.data.applied_policies.join('\n• ');
-                         const message = `智能空间管理清理完成！\n清理了 ${result.data.cleaned_count} 个缓存项\n释放 ${formatSize(result.data.freed_space)} 空间\n\n应用的策略:\n• ${policies}`;
-                         showResult(message, 'success');
-                     } else {
-                         showResult('无需清理\n\n• 没有完全无热度的缓存\n• 空间使用率未超过阈值，无需清理低热度缓存', 'info');
-                     }
-                    setTimeout(loadStats, 1000); // 延迟刷新统计
-                } else {
-                    showResult('空间管理失败: ' + (result.message || '未知错误'), 'error');
-                }
-            } catch (error) {
-                showResult('网络错误: ' + error.message, 'error');
-            }
-        }
-
-        // 自定义清理
-        async function customCleanup() {
-            const policy = {
-                max_entries: document.getElementById('maxEntries').value ? parseInt(document.getElementById('maxEntries').value) : null,
-                max_total_size: document.getElementById('maxSize').value ? parseInt(document.getElementById('maxSize').value) * 1024 * 1024 : null,
-                max_age: document.getElementById('maxAge').value ? parseInt(document.getElementById('maxAge').value) * 24 * 3600 : null,
-                min_heat_score: document.getElementById('minHeat').value ? parseFloat(document.getElementById('minHeat').value) : null,
-                enable_lru: true
-            };
-
-            // 检查是否至少设置了一个策略
-            const hasPolicy = Object.values(policy).some(value => value !== null && value !== true);
-            if (!hasPolicy) {
-                showResult('请至少设置一个清理策略参数', 'error');
-                return;
-            }
-
-            let policyDesc = '清理策略:\n';
-            if (policy.max_entries) policyDesc += `• 最大缓存数量: ${policy.max_entries}\n`;
-            if (policy.max_total_size) policyDesc += `• 最大总大小: ${formatSize(policy.max_total_size)}\n`;
-            if (policy.max_age) policyDesc += `• 最大生存时间: ${policy.max_age / (24 * 3600)} 天\n`;
-            if (policy.min_heat_score) policyDesc += `• 最小热度评分: ${policy.min_heat_score}\n`;
-
-            if (!confirm(`确定要执行自定义策略清理吗？\n\n${policyDesc}`)) return;
-            
-            try {
-                showResult('正在执行自定义清理...', 'success');
-                const response = await fetch('/api/cache/cleanup/policy', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(policy)
-                });
-                const result = await response.json();
-                
-                if (result.success && result.data) {
-                    const message = `策略清理完成！\n删除 ${result.data.cleaned_count} 个缓存\n释放 ${formatSize(result.data.freed_space)}\n耗时 ${result.data.duration_ms}ms`;
-                    showResult(message, 'success');
-                    setTimeout(loadStats, 1000); // 延迟刷新统计
-                } else {
-                    showResult('策略清理失败: ' + (result.message || '未知错误'), 'error');
-                }
-            } catch (error) {
-                showResult('网络错误: ' + error.message, 'error');
-            }
-        }
-
         // 清空所有缓存
         async function clearAll() {
-            if (!confirm('⚠️ 确定要清空所有缓存吗？\n\n此操作将删除所有缓存文件，不可恢复！')) return;
-            if (!confirm('⚠️ 最后确认\n\n真的要删除所有缓存吗？这个操作无法撤销！')) return;
+            if (!confirm('⚠️ 确定要清空所有缓存吗？\\n\\n此操作将删除所有缓存文件，不可恢复！')) return;
+            if (!confirm('⚠️ 最后确认\\n\\n真的要删除所有缓存吗？这个操作无法撤销！')) return;
             
             try {
-                showResult('正在清空所有缓存...', 'success');
+                showResult('正在清空所有缓存...', 'info');
                 const response = await fetch('/api/cache/clear', { method: 'DELETE' });
                 const result = await response.json();
                 
                 if (result.success && result.data) {
-                    const message = `清空完成！\n删除 ${result.data.cleaned_count} 个缓存\n释放 ${formatSize(result.data.freed_space)}\n耗时 ${result.data.duration_ms}ms`;
+                    const message = `清空完成！\\n删除 ${result.data.cleaned_count} 个缓存\\n释放 ${formatSize(result.data.freed_space)}`;
                     showResult(message, 'success');
                     setTimeout(loadStats, 1000); // 延迟刷新统计
                 } else {
@@ -1599,18 +1573,16 @@ pub const CACHE_MANAGEMENT_HTML: &str = r#"<!DOCTYPE html>
             result.className = `result ${type}`;
             result.style.display = 'block';
             
-            // 成功消息5秒后消失，错误消息10秒后消失
-            const timeout = type === 'success' ? 5000 : 10000;
-            setTimeout(() => {
-                result.style.display = 'none';
-            }, timeout);
+            // 成功和信息消息5秒后自动隐藏
+            if (type === 'success' || type === 'info') {
+                setTimeout(() => {
+                    result.style.display = 'none';
+                }, 5000);
+            }
         }
 
-        // 页面加载时获取统计信息
-        window.addEventListener('load', loadStats);
-        
-        // 每30秒自动刷新统计信息
-        setInterval(loadStats, 30000);
+        // 页面加载时自动获取统计信息
+        document.addEventListener('DOMContentLoaded', loadStats);
     </script>
 </body>
 </html>"#;
