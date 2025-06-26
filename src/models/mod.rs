@@ -134,6 +134,18 @@ impl ImageTransformParams {
     /// 从URL参数字符串解析转换参数
     /// 格式: w1200_h1200_jpeg_naw_q80
     pub fn parse(params_str: &str) -> Result<Self, String> {
+        // 如果参数字符串为空，返回空的转换参数
+        if params_str.trim().is_empty() {
+            return Ok(Self {
+                width: None,
+                height: None,
+                format: None,
+                quality: None,
+                no_alpha: false,
+                background_color: None,
+            });
+        }
+
         let mut params = ImageTransformParams {
             width: None,
             height: None,
@@ -211,6 +223,42 @@ impl ImageTransformParams {
             || self.format.is_some()
             || self.quality.is_some()
             || self.no_alpha
+    }
+
+    /// 生成标准化的参数字符串（用于缓存键生成）
+    /// 按固定顺序排列参数，确保相同功能的转换生成相同的缓存键
+    pub fn to_normalized_string(&self) -> String {
+        let mut parts = Vec::new();
+
+        // 按固定顺序添加参数
+        if let Some(width) = self.width {
+            parts.push(format!("w{}", width));
+        }
+
+        if let Some(height) = self.height {
+            parts.push(format!("h{}", height));
+        }
+
+        if let Some(ref format) = self.format {
+            parts.push(format.clone());
+        }
+
+        if let Some(quality) = self.quality {
+            parts.push(format!("q{}", quality));
+        }
+
+        if self.no_alpha {
+            match &self.background_color {
+                Some(BackgroundColor::White) => parts.push("naw".to_string()),
+                Some(BackgroundColor::Black) => parts.push("nab".to_string()),
+                Some(BackgroundColor::Custom(r, g, b)) => {
+                    parts.push(format!("na#{:02x}{:02x}{:02x}", r, g, b));
+                }
+                None => parts.push("na".to_string()),
+            }
+        }
+
+        parts.join("_")
     }
 
     /// 获取目标MIME类型

@@ -7,7 +7,7 @@ use tokio::fs;
 use tracing::{error, info, warn};
 
 use crate::config::AppConfig;
-use crate::models::{CacheCleanupPolicy, CacheCleanupResult, CacheInfo, CacheStats};
+use crate::models::{CacheCleanupPolicy, CacheCleanupResult, CacheInfo, CacheStats, ImageTransformParams};
 use crate::repositories::{CacheRepository, CacheRepositoryTrait};
 use crate::utils::AppError;
 
@@ -39,11 +39,13 @@ impl CacheService {
     }
 
     /// 生成缓存键
-    pub fn generate_cache_key(original_hash: &str, transform_params: &str) -> String {
+    /// 使用原始hash和标准化的转换参数生成一致的缓存键
+    pub fn generate_cache_key(original_hash: &str, transform_params: &ImageTransformParams) -> String {
+        let normalized_params = transform_params.to_normalized_string();
         let mut hasher = Sha256::new();
         hasher.update(original_hash.as_bytes());
         hasher.update(b":");
-        hasher.update(transform_params.as_bytes());
+        hasher.update(normalized_params.as_bytes());
         format!("{:x}", hasher.finalize())
     }
 
@@ -101,7 +103,7 @@ impl CacheService {
     pub async fn save_cache(
         &self,
         original_hash: &str,
-        transform_params: &str,
+        transform_params: &ImageTransformParams,
         data: &[u8],
         mime_type: &str,
     ) -> Result<CacheInfo, AppError> {
@@ -114,6 +116,7 @@ impl CacheService {
 
         let cache_key = Self::generate_cache_key(original_hash, transform_params);
         let file_path = self.get_cache_file_path(&cache_key, mime_type);
+        let normalized_params_str = transform_params.to_normalized_string();
 
         // 确保缓存子目录存在
         if let Some(parent) = Path::new(&file_path).parent() {
@@ -132,7 +135,7 @@ impl CacheService {
         let cache_info = CacheInfo {
             cache_key: cache_key.clone(),
             original_hash: original_hash.to_string(),
-            transform_params: transform_params.to_string(),
+            transform_params: normalized_params_str,
             file_path: file_path.clone(),
             file_size: data.len() as u64,
             mime_type: mime_type.to_string(),

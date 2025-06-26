@@ -74,10 +74,15 @@ pub async fn get_image(
         let params = ImageTransformParams::parse(params_str)
             .map_err(|e| AppError::BadRequest(format!("转换参数解析失败: {}", e)))?;
 
-        // 验证参数合理性
-        ImageTransformService::validate_params(&params)?;
-
-        (hash, Some(params))
+        // 检查是否真的需要转换
+        if !params.needs_transform() {
+            info!("转换参数为空，返回原图: {}", hash);
+            (hash, None)
+        } else {
+            // 验证参数合理性
+            ImageTransformService::validate_params(&params)?;
+            (hash, Some(params))
+        }
     } else {
         (identifier.as_str(), None)
     };
@@ -98,8 +103,7 @@ pub async fn get_image(
 
         // 检查是否启用缓存
         if config.cache.enable_transform_cache {
-            let transform_params_str = identifier.split('@').nth(1).unwrap_or("").to_string();
-            let cache_key = CacheService::generate_cache_key(hash, &transform_params_str);
+            let cache_key = CacheService::generate_cache_key(hash, params);
 
             // 尝试从缓存获取
             let connection = app_state.db_pool().get_connection();
@@ -127,7 +131,7 @@ pub async fn get_image(
                 if let Err(e) = cache_service
                     .save_cache(
                         hash,
-                        &transform_params_str,
+                        params,
                         &transformed_data,
                         &transformed_mime,
                     )
