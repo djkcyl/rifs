@@ -1,9 +1,6 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use sea_orm::{
-    entity::prelude::*, ActiveModelTrait, EntityTrait,
-    QueryOrder,
-};
+use sea_orm::{entity::prelude::*, ActiveModelTrait, EntityTrait, QueryOrder};
 use std::sync::Arc;
 use tracing::{debug, error, info};
 
@@ -55,8 +52,6 @@ impl CacheRepository {
             base: BaseRepository::new(connection),
         }
     }
-
-
 
     /// 计算衰减后的热度评分
     /// 基于访问频率、时间衰减和配置的衰减因子

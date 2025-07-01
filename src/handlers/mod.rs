@@ -4,8 +4,8 @@ pub mod image_handler;
 pub mod static_files;
 
 pub use cache_handler::{
-    auto_cleanup_cache, cache_management_dashboard, clear_all_cache,
-    decay_heat_scores, get_cache_stats,
+    auto_cleanup_cache, cache_management_dashboard, clear_all_cache, decay_heat_scores,
+    get_cache_stats,
 };
 pub use health_handler::{get_system_stats, health_check_detailed};
 pub use image_handler::{

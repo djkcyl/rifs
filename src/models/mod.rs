@@ -120,6 +120,19 @@ pub struct ImageTransformParams {
     pub no_alpha: bool,
     /// 去除透明通道后的背景色
     pub background_color: Option<BackgroundColor>,
+    /// Base64输出模式
+    pub base64_mode: Base64OutputMode,
+}
+
+/// Base64输出模式
+#[derive(Debug, Clone, PartialEq)]
+pub enum Base64OutputMode {
+    /// 不输出base64
+    None,
+    /// 输出包含完整信息的JSON结构体
+    Structured,
+    /// 只输出纯base64字符串
+    Raw,
 }
 
 /// 背景色选项
@@ -143,6 +156,7 @@ impl ImageTransformParams {
                 quality: None,
                 no_alpha: false,
                 background_color: None,
+                base64_mode: Base64OutputMode::None,
             });
         }
 
@@ -153,6 +167,7 @@ impl ImageTransformParams {
             quality: None,
             no_alpha: false,
             background_color: None,
+            base64_mode: Base64OutputMode::None,
         };
 
         for param in params_str.split('_') {
@@ -202,6 +217,12 @@ impl ImageTransformParams {
                         params.quality = Some(quality);
                     }
                 }
+            } else if param == "base64" || param == "b64" {
+                // base64结构化输出参数（JSON格式）
+                params.base64_mode = Base64OutputMode::Structured;
+            } else if param == "base64raw" || param == "b64raw" {
+                // base64纯文本输出参数
+                params.base64_mode = Base64OutputMode::Raw;
             }
         }
 
@@ -217,6 +238,7 @@ impl ImageTransformParams {
     }
 
     /// 检查是否需要进行转换
+    /// base64参数不影响是否需要转换，它只控制输出格式
     pub fn needs_transform(&self) -> bool {
         self.width.is_some()
             || self.height.is_some()
@@ -256,6 +278,12 @@ impl ImageTransformParams {
                 }
                 None => parts.push("na".to_string()),
             }
+        }
+
+        match self.base64_mode {
+            Base64OutputMode::Structured => parts.push("base64".to_string()),
+            Base64OutputMode::Raw => parts.push("base64raw".to_string()),
+            Base64OutputMode::None => {}
         }
 
         parts.join("_")
@@ -350,4 +378,21 @@ pub struct CacheCleanupResult {
     pub applied_policies: Vec<String>,
     /// 清理耗时（毫秒）
     pub duration_ms: u64,
+}
+
+/// Base64图片响应结构体
+#[derive(Debug, Serialize)]
+pub struct Base64ImageResponse {
+    /// 成功状态
+    pub success: bool,
+    /// 响应消息
+    pub message: String,
+    /// Base64编码的图片数据
+    pub data: String,
+    /// MIME类型
+    pub mime_type: String,
+    /// 文件大小（字节）
+    pub size: usize,
+    /// 原图信息
+    pub original: ImageInfo,
 }

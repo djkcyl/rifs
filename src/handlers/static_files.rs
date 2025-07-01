@@ -548,8 +548,8 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
                                 <small style="color: #94a3b8;">在文件名后添加 @ 参数即可实现实时转换</small>
                             </div>
                             <div style="margin-top: 8px; font-family: 'Monaco', 'Courier New', monospace; font-size: 0.85rem; background: rgba(6, 182, 212, 0.1); padding: 8px; border-radius: 6px;">
-                                <strong>示例:</strong> /images/abc123@w800_h600_jpeg_q90<br>
-                                <strong>参数:</strong> w宽度_h高度_格式_na去透明_q质量
+                                <strong>示例:</strong> /images/abc123@w800_h600_jpeg_q90_base64raw<br>
+                                <strong>参数:</strong> w宽度_h高度_格式_na去透明_q质量_base64/base64raw
                             </div>
                         </div>
                     </div>
@@ -696,6 +696,15 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
                                 <li><code>na#ff0000</code> - 去透明+自定义颜色</li>
                             </ul>
                         </div>
+                        <div>
+                            <strong style="color: #f1f5f9;">📤 输出格式</strong>
+                            <ul style="margin-top: 8px; padding-left: 20px;">
+                                <li><code>base64</code> 或 <code>b64</code> - 返回包含完整信息的JSON响应</li>
+                                <li><code>base64raw</code> 或 <code>b64raw</code> - 只返回纯base64字符串</li>
+                                <li>默认返回二进制图片数据</li>
+                                <li>JSON格式便于API集成，raw格式便于直接使用</li>
+                            </ul>
+                        </div>
                     </div>
 
                     <div style="background: rgba(6, 182, 212, 0.1); padding: 15px; border-radius: 8px; border-left: 4px solid #06b6d4;">
@@ -707,6 +716,10 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
                             <div>/images/abc123@png - GIF转PNG（提取第一帧）</div>
                             <div>/images/abc123@w600_jpeg - GIF第一帧转JPEG，最大宽度600px</div>
                             <div>/images/abc123@w600_na#00ff00 - 最大宽度600px，绿色背景</div>
+                            <div>/images/abc123@w800_jpeg_base64 - 宽度800px，JPEG格式，JSON结构化base64</div>
+                            <div>/images/abc123@base64 - 原图base64编码（JSON响应）</div>
+                            <div>/images/abc123@w800_jpeg_base64raw - 宽度800px，JPEG格式，纯base64字符串</div>
+                            <div>/images/abc123@base64raw - 原图纯base64字符串（仅文本）</div>
                         </div>
                     </div>
                     

@@ -4,11 +4,12 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+use base64::{engine::general_purpose, Engine as _};
 use tracing::{error, info, warn};
 
 use crate::app_state::AppState;
 use crate::config::AppConfig;
-use crate::models::{ImageQuery, ImageTransformParams, UploadResponse};
+use crate::models::{Base64ImageResponse, ImageQuery, ImageTransformParams, UploadResponse};
 use crate::services::{CacheService, ImageService, ImageTransformService};
 use crate::utils::AppError;
 
@@ -129,12 +130,7 @@ pub async fn get_image(
 
                 // 保存到缓存
                 if let Err(e) = cache_service
-                    .save_cache(
-                        hash,
-                        params,
-                        &transformed_data,
-                        &transformed_mime,
-                    )
+                    .save_cache(hash, params, &transformed_data, &transformed_mime)
                     .await
                 {
                     warn!("保存缓存失败: {}", e);
@@ -223,9 +219,19 @@ pub async fn get_image(
         final_data.len().to_string().parse().unwrap(),
     );
 
-    // 如果有转换参数，添加转换信息
-    if let Some(ref params) = transform_params {
-        headers.insert("x-transform-applied", "true".parse().unwrap());
+            // 如果有转换参数，添加转换信息
+        if let Some(ref params) = transform_params {
+            headers.insert("x-transform-applied", "true".parse().unwrap());
+            
+            match params.base64_mode {
+                crate::models::Base64OutputMode::Structured => {
+                    headers.insert("x-output-format", "base64-json".parse().unwrap());
+                }
+                crate::models::Base64OutputMode::Raw => {
+                    headers.insert("x-output-format", "base64-raw".parse().unwrap());
+                }
+                crate::models::Base64OutputMode::None => {}
+            }
 
         if let Some(width) = params.width {
             headers.insert("x-transform-width", width.to_string().parse().unwrap());
@@ -279,7 +285,44 @@ pub async fn get_image(
             .unwrap(),
     );
 
-    Ok((headers, final_data))
+        // 检查是否需要返回base64格式
+    if let Some(ref params) = transform_params {
+        match params.base64_mode {
+            crate::models::Base64OutputMode::Structured => {
+                // 使用base64编码并返回JSON结构体
+                let base64_data = general_purpose::STANDARD.encode(&final_data);
+                
+                let response = Base64ImageResponse {
+                    success: true,
+                    message: "图片获取成功".to_string(),
+                    data: base64_data,
+                    mime_type: final_mime.clone(),
+                    size: final_data.len(),
+                    original: image_info,
+                };
+
+                return Ok(Json(response).into_response());
+            }
+            crate::models::Base64OutputMode::Raw => {
+                // 只返回纯base64字符串
+                let base64_data = general_purpose::STANDARD.encode(&final_data);
+                
+                return Ok((
+                    [(
+                        header::CONTENT_TYPE,
+                        axum::http::HeaderValue::from_static("text/plain; charset=utf-8"),
+                    )],
+                    base64_data,
+                )
+                    .into_response());
+            }
+            crate::models::Base64OutputMode::None => {
+                // 不需要base64处理，继续正常流程
+            }
+        }
+    }
+
+    Ok((headers, final_data).into_response())
 }
 
 /// 获取图片信息接口（通过哈希值）

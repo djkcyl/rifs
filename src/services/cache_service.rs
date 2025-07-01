@@ -40,7 +40,10 @@ impl CacheService {
 
     /// 生成缓存键
     /// 使用原始hash和标准化的转换参数生成一致的缓存键
-    pub fn generate_cache_key(original_hash: &str, transform_params: &ImageTransformParams) -> String {
+    pub fn generate_cache_key(
+        original_hash: &str,
+        transform_params: &ImageTransformParams,
+    ) -> String {
         let normalized_params = transform_params.to_normalized_string();
         let mut hasher = Sha256::new();
         hasher.update(original_hash.as_bytes());
@@ -158,10 +161,11 @@ impl CacheService {
     pub async fn auto_cleanup(&self) -> Result<CacheCleanupResult, AppError> {
         let start_time = std::time::Instant::now();
         let config = AppConfig::get();
-        
+
         let stats = self.get_stats().await?;
-        let space_usage_ratio = stats.total_size as f64 / config.cache.max_cache_size.as_bytes() as f64;
-        
+        let space_usage_ratio =
+            stats.total_size as f64 / config.cache.max_cache_size.as_bytes() as f64;
+
         info!(
             "当前缓存空间使用率: {:.1}% ({} / {} 字节)",
             space_usage_ratio * 100.0,
@@ -210,8 +214,9 @@ impl CacheService {
 
         // 3. 检查是否还需要继续清理
         let updated_stats = self.get_stats().await?;
-        let updated_usage_ratio = updated_stats.total_size as f64 / config.cache.max_cache_size.as_bytes() as f64;
-        
+        let updated_usage_ratio =
+            updated_stats.total_size as f64 / config.cache.max_cache_size.as_bytes() as f64;
+
         if updated_usage_ratio >= config.cache.space_threshold_percent {
             // 4. 清理低热度缓存直到达到目标使用率
             let (cleaned, freed) = self.cleanup_low_heat_caches().await?;
@@ -236,10 +241,10 @@ impl CacheService {
     async fn cleanup_zero_heat_caches(&self) -> Result<(u64, u64), AppError> {
         let config = AppConfig::get();
         let max_age_seconds = config.cache.max_cache_age.as_seconds() as i64;
-        
+
         // 获取所有低热度缓存候选项
         let candidates = self.cache_repo.cleanup_low_heat_caches().await?;
-        
+
         // 筛选出需要清理的缓存：
         // 1. 完全无热度的缓存（heat_score <= 0.001）
         // 2. 或者超过最大生存时间且无热度的缓存
@@ -249,8 +254,9 @@ impl CacheService {
             .filter(|cache| {
                 let age_seconds = (now - cache.created_at).num_seconds();
                 let is_zero_heat = cache.heat_score <= 0.001;
-                let is_expired_and_no_heat = age_seconds > max_age_seconds && cache.heat_score <= 0.001;
-                
+                let is_expired_and_no_heat =
+                    age_seconds > max_age_seconds && cache.heat_score <= 0.001;
+
                 is_zero_heat || is_expired_and_no_heat
             })
             .collect();
@@ -260,10 +266,7 @@ impl CacheService {
             return Ok((0, 0));
         }
 
-        info!(
-            "找到 {} 个零热度缓存，准备清理",
-            zero_heat_caches.len()
-        );
+        info!("找到 {} 个零热度缓存，准备清理", zero_heat_caches.len());
 
         self.cleanup_candidates(zero_heat_caches).await
     }
@@ -271,7 +274,7 @@ impl CacheService {
     /// 清理低热度缓存
     async fn cleanup_low_heat_caches(&self) -> Result<(u64, u64), AppError> {
         let config = AppConfig::get();
-        
+
         // 计算目标清理大小
         let target_usage = config.cache.space_threshold_percent * 0.8; // 清理到阈值的80%
         let target_size = (config.cache.max_cache_size.as_bytes() as f64 * target_usage) as u64;
@@ -312,17 +315,21 @@ impl CacheService {
         // 选择要清理的缓存，直到达到目标释放空间
         let mut to_cleanup = Vec::new();
         let mut will_free = 0;
-        
+
         for cache in sorted_caches {
             to_cleanup.push(cache.clone());
             will_free += cache.file_size;
-            
+
             if will_free >= need_to_free {
                 break;
             }
         }
 
-        info!("将清理 {} 个低热度缓存，预计释放 {} 字节", to_cleanup.len(), will_free);
+        info!(
+            "将清理 {} 个低热度缓存，预计释放 {} 字节",
+            to_cleanup.len(),
+            will_free
+        );
 
         self.cleanup_candidates(to_cleanup).await
     }
